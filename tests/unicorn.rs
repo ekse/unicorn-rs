@@ -100,7 +100,7 @@ fn x86_intr_callback() {
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
 
-    let hook = emu.add_intr_hook(0x1000, 0x2000, callback)
+    let hook = emu.add_intr_hook(callback)
         .expect("failed to add code hook");
 
     assert_eq!(emu.emu_start(0x1000,

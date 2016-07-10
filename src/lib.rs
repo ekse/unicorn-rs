@@ -190,10 +190,10 @@ pub trait Cpu {
     }
 
     /// Add an interrupt hook.
-    fn add_intr_hook<F>(&mut self, begin: u64, end: u64, callback: F) -> Result<uc_hook, Error>
+    fn add_intr_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
         where F: Fn(&Unicorn, u32) + 'static
     {
-        self.mut_emu().add_intr_hook(begin, end, callback)
+        self.mut_emu().add_intr_hook(callback)
     }
 
     /// Add a memory hook.
@@ -740,7 +740,7 @@ impl Unicorn {
     }
 
     /// Add an interrupt hook.
-    pub fn add_intr_hook<F>(&mut self, begin: u64, end: u64, callback: F) -> Result<uc_hook, Error>
+    pub fn add_intr_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
         where F: Fn(&Unicorn, u32) + 'static
     {
         let mut hook: uc_hook = 0;
@@ -759,8 +759,8 @@ impl Unicorn {
                         HookType::INTR,
                         _callback,
                         p_user_data,
-                        begin,
-                        end)
+                        0,
+                        0)
         };
 
         if err == Error::OK {
