@@ -56,23 +56,60 @@ fn emulate_x86_negative_values() {
 
 #[test]
 fn x86_code_callback() {
-    #[allow(unused_variables)]
-    extern "C" fn callback(engine: uc_handle, address: u64, size: u32, user_data: *mut u64) {
-        println!("in callback at 0x{:08x}!", address);
-    }
+    #[derive(PartialEq, Debug)]
+    struct CodeExpectation(u64, u32);
+    let expects = vec![CodeExpectation(0x1000, 1), CodeExpectation(0x1001, 1)];
+    let codes: Vec<CodeExpectation> = Vec::new();
+    let codes_cell = ::std::rc::Rc::new(::std::cell::RefCell::new(codes));
+
+    let callback_codes = codes_cell.clone();
+    let callback = move |_: &unicorn::Unicorn, address: u64, size: u32| {
+        let mut codes = callback_codes.borrow_mut();
+        codes.push(CodeExpectation(address, size));
+    };
 
     let x86_code32: Vec<u8> = vec![0x41, 0x4a]; // INC ecx; DEC edx
 
-    let emu = CpuX86::new(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
+    let mut emu = CpuX86::new(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
 
-    let hook = emu.add_code_hook(unicorn::HookType::BLOCK, 0x1000, 0x2000, callback)
+    let hook = emu.add_code_hook(unicorn::CodeHookType::CODE, 0x1000, 0x2000, callback)
         .expect("failed to add code hook");
-    assert_eq!(emu.emu_start(0x1000, 0x1001, 10 * unicorn::SECOND_SCALE, 1000),
+    assert_eq!(emu.emu_start(0x1000, 0x1002, 10 * unicorn::SECOND_SCALE, 1000),
                Ok(()));
+    assert_eq!(expects, *codes_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
+}
 
+#[test]
+fn x86_intr_callback() {
+    #[derive(PartialEq, Debug)]
+    struct IntrExpectation(u32);
+    let expect = IntrExpectation(0x80);
+    let intr_cell = ::std::rc::Rc::new(::std::cell::RefCell::new(IntrExpectation(0)));
+
+    let callback_intr = intr_cell.clone();
+    let callback = move |_: &unicorn::Unicorn, intno: u32| {
+        *callback_intr.borrow_mut() = IntrExpectation(intno);
+    };
+
+    let x86_code32: Vec<u8> = vec![0xcd, 0x80]; // INT 0x80;
+
+    let mut emu = CpuX86::new(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
+    assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
+    assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
+
+    let hook = emu.add_intr_hook(0x1000, 0x2000, callback)
+        .expect("failed to add code hook");
+
+    assert_eq!(emu.emu_start(0x1000,
+                             0x1000 + x86_code32.len() as u64,
+                             10 * unicorn::SECOND_SCALE,
+                             1000),
+               Ok(()));
+    assert_eq!(expect, *intr_cell.borrow());
+    assert_eq!(emu.remove_hook(hook), Ok(()));
 }
 
 #[test]

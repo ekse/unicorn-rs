@@ -126,6 +126,13 @@ pub enum HookType {
 
 #[repr(C)]
 #[derive(PartialEq, Debug, Clone, Copy)]
+pub enum CodeHookType {
+    CODE = 1 << 2, // Hook a range of code
+    BLOCK = 1 << 3, // Hook basic blocks
+}
+
+#[repr(C)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Query {
     /// The current hardware mode.
     MODE = 1,

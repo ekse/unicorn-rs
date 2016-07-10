@@ -39,6 +39,7 @@ pub mod x86_const;
 
 use ffi::*;
 use std::mem;
+use std::collections::HashMap;
 use std::ffi::CStr;
 
 pub use arm64_const::*;
@@ -96,6 +97,8 @@ pub trait Cpu {
     type Reg: Register;
 
     fn emu(&self) -> &Unicorn;
+
+    fn mut_emu<'a>(&'a mut self) -> &'a mut Unicorn;
 
     /// Read an unsigned value from a register.
     fn reg_read(&self, reg: Self::Reg) -> Result<u64, Error> {
@@ -175,16 +178,22 @@ pub trait Cpu {
     }
 
     /// Add a code hook.
-    fn add_code_hook(&self,
-                     hook_type: HookType,
-                     begin: u64,
-                     end: u64,
-                     callback: extern "C" fn(engine: uc_handle,
-                                             address: u64,
-                                             size: u32,
-                                             user_data: *mut u64))
-                     -> Result<uc_hook, Error> {
-        self.emu().add_code_hook(hook_type, begin, end, callback)
+    fn add_code_hook<F>(&mut self,
+                        hook_type: CodeHookType,
+                        begin: u64,
+                        end: u64,
+                        callback: F)
+                        -> Result<uc_hook, Error>
+        where F: Fn(&Unicorn, u64, u32) -> () + 'static
+    {
+        self.mut_emu().add_code_hook(hook_type, begin, end, callback)
+    }
+
+    /// Add an interrupt hook.
+    fn add_intr_hook<F>(&mut self, begin: u64, end: u64, callback: F) -> Result<uc_hook, Error>
+        where F: Fn(&Unicorn, u32) + 'static
+    {
+        self.mut_emu().add_intr_hook(begin, end, callback)
     }
 
     /// Add a memory hook.
@@ -205,8 +214,8 @@ pub trait Cpu {
     /// Remove a hook.
     ///
     /// `hook` is the value returned by either `add_code_hook` or `add_mem_hook`.
-    fn remove_hook(&self, hook: uc_hook) -> Result<(), Error> {
-        self.emu().remove_hook(hook)
+    fn remove_hook(&mut self, hook: uc_hook) -> Result<(), Error> {
+        self.mut_emu().remove_hook(hook)
     }
 
     /// Return the last error code when an API function failed.
@@ -249,6 +258,10 @@ impl Cpu for CpuARM {
     fn emu(&self) -> &Unicorn {
         &self.emu
     }
+
+    fn mut_emu(&mut self) -> &mut Unicorn {
+        &mut self.emu
+    }
 }
 
 /// An ARM64 emulator instance.
@@ -272,6 +285,10 @@ impl Cpu for CpuARM64 {
 
     fn emu(&self) -> &Unicorn {
         &self.emu
+    }
+
+    fn mut_emu(&mut self) -> &mut Unicorn {
+        &mut self.emu
     }
 }
 
@@ -297,6 +314,10 @@ impl Cpu for CpuM68K {
     fn emu(&self) -> &Unicorn {
         &self.emu
     }
+
+    fn mut_emu(&mut self) -> &mut Unicorn {
+        &mut self.emu
+    }
 }
 
 /// A MIPS emulator instance.
@@ -320,6 +341,10 @@ impl Cpu for CpuMIPS {
 
     fn emu(&self) -> &Unicorn {
         &self.emu
+    }
+
+    fn mut_emu(&mut self) -> &mut Unicorn {
+        &mut self.emu
     }
 }
 
@@ -345,6 +370,10 @@ impl Cpu for CpuSPARC {
     fn emu(&self) -> &Unicorn {
         &self.emu
     }
+
+    fn mut_emu(&mut self) -> &mut Unicorn {
+        &mut self.emu
+    }
 }
 
 /// An X86 emulator instance.
@@ -369,18 +398,42 @@ impl Cpu for CpuX86 {
     fn emu(&self) -> &Unicorn {
         &self.emu
     }
-}
 
-
-/// Internal : A Unicorn emulator instance, use one of the Cpu structs instead.
-pub struct Unicorn {
-    handle: libc::size_t, // Opaque handle to uc_engine
+    fn mut_emu(&mut self) -> &mut Unicorn {
+        &mut self.emu
+    }
 }
 
 #[allow(non_camel_case_types)]
 pub type uc_handle = libc::size_t;
 #[allow(non_camel_case_types)]
 pub type uc_hook = libc::size_t;
+
+/// Struct to bind a unicorn instance to a callback.
+pub struct UnicornHook<F> {
+    unicorn: *const Unicorn,
+    callback: F,
+}
+
+extern "C" fn code_hook_proxy(_: uc_handle, address: u64, size: u32, user_data: *mut CodeHook) {
+    let code_hook = unsafe { &mut *user_data };
+    (code_hook.callback)(unsafe { &*code_hook.unicorn }, address, size);
+}
+
+extern "C" fn intr_hook_proxy(_: uc_handle, intno: u32, user_data: *mut IntrHook) {
+    let intr_hook = unsafe { &mut *user_data };
+    (intr_hook.callback)(unsafe { &*intr_hook.unicorn }, intno);
+}
+
+type CodeHook = UnicornHook<Box<Fn(&Unicorn, u64, u32)>>;
+type IntrHook = UnicornHook<Box<Fn(&Unicorn, u32)>>;
+
+/// Internal : A Unicorn emulator instance, use one of the Cpu structs instead.
+pub struct Unicorn {
+    handle: libc::size_t, // Opaque handle to uc_engine
+    code_callbacks: HashMap<uc_hook, Box<CodeHook>>,
+    intr_callbacks: HashMap<uc_hook, Box<IntrHook>>,
+}
 
 impl Error {
     pub fn msg(&self) -> String {
@@ -428,7 +481,11 @@ impl Unicorn {
         let mut handle: libc::size_t = 0;
         let err = unsafe { uc_open(arch, mode, &mut handle) };
         if err == Error::OK {
-            Ok(Unicorn { handle: handle })
+            Ok(Unicorn {
+                handle: handle,
+                code_callbacks: HashMap::default(),
+                intr_callbacks: HashMap::default(),
+            })
         } else {
             Err(err)
         }
@@ -647,30 +704,67 @@ impl Unicorn {
     }
 
     /// Add a code hook.
-    pub fn add_code_hook(&self,
-                         hook_type: HookType,
-                         begin: u64,
-                         end: u64,
-                         callback: extern "C" fn(engine: uc_handle,
-                                                 address: u64,
-                                                 size: u32,
-                                                 user_data: *mut u64))
-                         -> Result<uc_hook, Error> {
-        let mut hook: libc::size_t = 0;
-        let mut user_data: libc::size_t = 0;
+    pub fn add_code_hook<F>(&mut self,
+                            hook_type: CodeHookType,
+                            begin: u64,
+                            end: u64,
+                            callback: F)
+                            -> Result<uc_hook, Error>
+        where F: Fn(&Unicorn, u64, u32) + 'static
+    {
+        let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
-        let p_user_data: *mut libc::size_t = &mut user_data;
+
+        let user_data = Box::new(CodeHook {
+            unicorn: self as *mut _,
+            callback: Box::new(callback),
+        });
+        let p_user_data: *mut libc::size_t = unsafe { mem::transmute(&*user_data) };
+        let _callback: libc::size_t = code_hook_proxy as usize;
+
         let err = unsafe {
-            let _callback: libc::size_t = mem::transmute(callback);
             uc_hook_add(self.handle,
                         p_hook,
-                        hook_type,
+                        mem::transmute(hook_type),
                         _callback,
                         p_user_data,
                         begin,
                         end)
         };
         if err == Error::OK {
+            self.code_callbacks.insert(hook, user_data);
+            Ok(hook)
+        } else {
+            Err(err)
+        }
+    }
+
+    /// Add an interrupt hook.
+    pub fn add_intr_hook<F>(&mut self, begin: u64, end: u64, callback: F) -> Result<uc_hook, Error>
+        where F: Fn(&Unicorn, u32) + 'static
+    {
+        let mut hook: uc_hook = 0;
+        let p_hook: *mut libc::size_t = &mut hook;
+
+        let user_data = Box::new(IntrHook {
+            unicorn: self as *mut _,
+            callback: Box::new(callback),
+        });
+        let p_user_data: *mut libc::size_t = unsafe { mem::transmute(&*user_data) };
+        let _callback: libc::size_t = intr_hook_proxy as usize;
+
+        let err = unsafe {
+            uc_hook_add(self.handle,
+                        p_hook,
+                        HookType::INTR,
+                        _callback,
+                        p_user_data,
+                        begin,
+                        end)
+        };
+
+        if err == Error::OK {
+            self.intr_callbacks.insert(hook, user_data);
             Ok(hook)
         } else {
             Err(err)
@@ -713,8 +807,9 @@ impl Unicorn {
     /// Remove a hook.
     ///
     /// `hook` is the value returned by either `add_code_hook` or `add_mem_hook`.
-    pub fn remove_hook(&self, hook: uc_hook) -> Result<(), Error> {
+    pub fn remove_hook(&mut self, hook: uc_hook) -> Result<(), Error> {
         let err = unsafe { uc_hook_del(self.handle, hook) } as Error;
+        self.code_callbacks.remove(&hook);
         if err == Error::OK {
             Ok(())
         } else {
