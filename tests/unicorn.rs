@@ -174,6 +174,14 @@ fn emulate_arm() {
 
     assert_eq!(emu.reg_write(unicorn::RegisterARM::SP, 12), Ok(()));
     assert_eq!(emu.reg_write(unicorn::RegisterARM::R0, 10), Ok(()));
+
+    assert_eq!(emu.emu_start(0x1000,
+                             (0x1000 + arm_code32.len()) as u64,
+                             10 * unicorn::SECOND_SCALE,
+                             1000),
+               Ok(()));
+    assert_eq!(emu.reg_read(unicorn::RegisterARM::SP), Ok((0)));
+    assert_eq!(emu.reg_read(unicorn::RegisterARM::R0), Ok((10)));
 }
 
 #[test]
