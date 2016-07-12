@@ -1,6 +1,6 @@
 extern crate unicorn;
 
-use unicorn::{Cpu, CpuX86, CpuARM, CpuMIPS, uc_handle};
+use unicorn::{Cpu, CpuX86, CpuARM, CpuMIPS};
 
 #[test]
 fn emulate_x86() {
@@ -101,7 +101,7 @@ fn x86_intr_callback() {
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
 
     let hook = emu.add_intr_hook(callback)
-        .expect("failed to add code hook");
+        .expect("failed to add intr hook");
 
     assert_eq!(emu.emu_start(0x1000,
                              0x1000 + x86_code32.len() as u64,
@@ -114,30 +114,44 @@ fn x86_intr_callback() {
 
 #[test]
 fn x86_mem_callback() {
-    #[allow(unused_variables)]
-    extern "C" fn callback(engine: uc_handle,
-                           mem_type: unicorn::MemType,
-                           address: u64,
-                           size: i32,
-                           value: i64,
-                           user_data: *mut u64) {
-        println!("unmapped mem read at 0x{:08x}!", address);
-    }
+    #[derive(PartialEq, Debug)]
+    struct MemExpectation(unicorn::MemType, u64, usize, i64);
+    let expects = vec![MemExpectation(unicorn::MemType::WRITE, 0x2000, 4, 0xdeadbeef),
+                       MemExpectation(unicorn::MemType::READ_UNMAPPED, 0x10000, 4, 0)];
+    let mems: Vec<MemExpectation> = Vec::new();
+    let mems_cell = ::std::rc::Rc::new(::std::cell::RefCell::new(mems));
 
-    let x86_code32: Vec<u8> = vec![0x8b, 0x00]; // MOV eax, dword [eax]
+    let callback_mems = mems_cell.clone();
+    let callback = move |_: &unicorn::Unicorn,
+                         mem_type: unicorn::MemType,
+                         address: u64,
+                         size: usize,
+                         value: i64| {
+        let mut mems = callback_mems.borrow_mut();
+        mems.push(MemExpectation(mem_type, address, size, value));
+        false
+    };
+
+    // mov eax, 0xdeadbeef;
+    // mov [0x2000], eax;
+    // mov eax, [0x10000];
+    let x86_code32: Vec<u8> = vec![0xB8, 0xEF, 0xBE, 0xAD, 0xDE, 0xA3, 0x00, 0x20, 0x00, 0x00,
+                                   0xA1, 0x00, 0x00, 0x01, 0x00];
 
     let mut emu = CpuX86::new(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
 
-    let hook = emu.add_mem_hook(unicorn::HookType::MEM_READ_UNMAPPED,
-                      0,
-                      std::u64::MAX,
-                      callback)
+    let hook = emu.add_mem_hook(unicorn::MemHookType::MEM_ALL, 0, std::u64::MAX, callback)
         .expect("failed to add memory hook");
     assert_eq!(emu.reg_write(unicorn::RegisterX86::EAX, 0x123), Ok(()));
-    assert_eq!(emu.emu_start(0x1000, 0x1001, 10 * unicorn::SECOND_SCALE, 1),
+    assert_eq!(emu.emu_start(0x1000,
+                             0x1000 + x86_code32.len() as u64,
+                             10 * unicorn::SECOND_SCALE,
+                             0x1000),
                Err((unicorn::Error::READ_UNMAPPED)));
+
+    assert_eq!(expects, *mems_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
 }
 
@@ -160,14 +174,6 @@ fn emulate_arm() {
 
     assert_eq!(emu.reg_write(unicorn::RegisterARM::SP, 12), Ok(()));
     assert_eq!(emu.reg_write(unicorn::RegisterARM::R0, 10), Ok(()));
-
-    assert_eq!(emu.emu_start(0x1000,
-                             (0x1000 + arm_code32.len()) as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
-    assert_eq!(emu.reg_read(unicorn::RegisterARM::SP), Ok((0)));
-    assert_eq!(emu.reg_read(unicorn::RegisterARM::R0), Ok((10)));
 }
 
 #[test]

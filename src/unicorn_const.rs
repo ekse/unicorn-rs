@@ -93,7 +93,7 @@ pub struct MemRegion {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum MemType {
     READ = 16, // Memory is read from
     WRITE, // Memory is written to
@@ -129,6 +129,28 @@ pub enum HookType {
 pub enum CodeHookType {
     CODE = 1 << 2, // Hook a range of code
     BLOCK = 1 << 3, // Hook basic blocks
+}
+
+#[repr(C)]
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum MemHookType {
+    MEM_READ_UNMAPPED = 1 << 4, // Hook for memory read on unmapped memory
+    MEM_WRITE_UNMAPPED = 1 << 5, // Hook for invalid memory write events
+    MEM_FETCH_UNMAPPED = 1 << 6, // Hook for invalid memory fetch for execution events
+    MEM_READ_PROT = 1 << 7, // Hook for memory read on read-protected memory
+    MEM_WRITE_PROT = 1 << 8, // Hook for memory write on write-protected memory
+    MEM_FETCH_PROT = 1 << 9, // Hook for memory fetch on non-executable memory
+    MEM_READ = 1 << 10, // Hook memory read events.
+    MEM_WRITE = 1 << 11, // Hook memory write events.
+    MEM_FETCH = 1 << 12, // Hook memory fetch for execution events
+    MEM_UNMAPPED = 0b111 << 4, // hook type for all events of unmapped memory access
+    MEM_PROT = 0b111 << 7, // hook type for all events of illegal protected memory access
+    MEM_READ_INVALID = (1 << 4) | (1 << 7), /* Hook type for all events of illegal read memory access */
+    MEM_WRITE_INVALID = (1 << 5) | (1 << 8), /* Hook type for all events of illegal write memory access/ */
+    MEM_FETCH_INVALID = (1 << 6) | (1 << 9), /* Hook type for all events of illegal fetch memory access */
+    MEM_INVALID = (0b111111 << 4), // Hook type for all events of illegal memory access
+    MEM_VALID = (0b111 << 10), // Hook type for all events of valid memory access
+    MEM_ALL = 0b111111111 << 4, // Hook type for all events.
 }
 
 #[repr(C)]
