@@ -828,7 +828,10 @@ impl Unicorn {
     /// `hook` is the value returned by either `add_code_hook` or `add_mem_hook`.
     pub fn remove_hook(&mut self, hook: uc_hook) -> Result<(), Error> {
         let err = unsafe { uc_hook_del(self.handle, hook) } as Error;
+        // Check in all map to find which one has the hook.
         self.code_callbacks.remove(&hook);
+        self.intr_callbacks.remove(&hook);
+        self.mem_callbacks.remove(&hook);
         if err == Error::OK {
             Ok(())
         } else {
