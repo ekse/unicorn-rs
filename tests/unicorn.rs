@@ -158,6 +158,36 @@ fn x86_mem_callback() {
 }
 
 #[test]
+fn x86_insn_in_callback() {
+    #[derive(PartialEq, Debug)]
+    struct InsnInExpectation(u32, usize);
+    let expect = InsnInExpectation(0x10, 4);
+    let insn_cell = Rc::new(RefCell::new(expect));
+
+    let callback_insn = insn_cell.clone();
+    let callback = move |_: &unicorn::Unicorn, port: u32, size: usize| {
+        *callback_insn.borrow_mut() = InsnInExpectation(port, size);
+    };
+
+    let x86_code32: Vec<u8> = vec![0xe5, 0x10]; // IN eax, 0x10;
+
+    let mut emu = CpuX86::new(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
+    assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
+    assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
+
+    let hook = emu.add_insn_in_hook(InsnType::X86_INS_OUT, 1, 0, callback)
+        .expect("failed to add in hook");
+
+    assert_eq!(emu.emu_start(0x1000,
+                             0x1000 + x86_code32.len() as u64,
+                             10 * unicorn::SECOND_SCALE,
+                             1000),
+               Ok(()));
+    assert_eq!(expect, *insn_cell.borrow());
+    assert_eq!(emu.remove_hook(hook), Ok(()));
+}
+
+#[test]
 fn emulate_arm() {
     let arm_code32: Vec<u8> = vec![0x83, 0xb0]; // sub    sp, #0xc
 
