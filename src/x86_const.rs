@@ -1,5 +1,5 @@
 // X86 registers
-#[repr(i32)]
+#[repr(C)]
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum RegisterX86 {
     INVALID = 0,
@@ -244,4 +244,20 @@ pub enum RegisterX86 {
     R13W,
     R14W,
     R15W,
+}
+
+#[repr(C)]
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum InsnX86 {
+    IN = 218,
+    OUT = 500,
+    SYSCALL = 699,
+    SYSENTER = 700,
+}
+
+#[repr(C)]
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum InsnSysX86 {
+    SYSCALL = InsnX86::SYSCALL as isize,
+    SYSENTER = InsnX86::SYSENTER as isize,
 }

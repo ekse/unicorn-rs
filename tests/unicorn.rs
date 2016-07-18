@@ -162,11 +162,12 @@ fn x86_insn_in_callback() {
     #[derive(PartialEq, Debug)]
     struct InsnInExpectation(u32, usize);
     let expect = InsnInExpectation(0x10, 4);
-    let insn_cell = Rc::new(RefCell::new(expect));
+    let insn_cell = Rc::new(RefCell::new(InsnInExpectation(0, 0)));
 
     let callback_insn = insn_cell.clone();
     let callback = move |_: &unicorn::Unicorn, port: u32, size: usize| {
         *callback_insn.borrow_mut() = InsnInExpectation(port, size);
+        return 0;
     };
 
     let x86_code32: Vec<u8> = vec![0xe5, 0x10]; // IN eax, 0x10;
@@ -175,11 +176,75 @@ fn x86_insn_in_callback() {
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
 
-    let hook = emu.add_insn_in_hook(InsnType::X86_INS_OUT, 1, 0, callback)
+    let hook = emu.add_insn_in_hook(callback)
         .expect("failed to add in hook");
 
     assert_eq!(emu.emu_start(0x1000,
                              0x1000 + x86_code32.len() as u64,
+                             10 * unicorn::SECOND_SCALE,
+                             1000),
+               Ok(()));
+    assert_eq!(expect, *insn_cell.borrow());
+    assert_eq!(emu.remove_hook(hook), Ok(()));
+}
+
+#[test]
+fn x86_insn_out_callback() {
+    #[derive(PartialEq, Debug)]
+    struct InsnOutExpectation(u32, usize, u32);
+    let expect = InsnOutExpectation(0x46, 1, 0x32);
+    let insn_cell = Rc::new(RefCell::new(InsnOutExpectation(0, 0, 0)));
+
+    let callback_insn = insn_cell.clone();
+    let callback = move |_: &unicorn::Unicorn, port: u32, size: usize, value: u32| {
+        *callback_insn.borrow_mut() = InsnOutExpectation(port, size, value);
+    };
+
+    let x86_code32: Vec<u8> = vec![0xb0, 0x32, 0xe6, 0x46]; // MOV al, 0x32; OUT  0x46, al;
+
+    let mut emu = CpuX86::new(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
+    assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
+    assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
+
+    let hook = emu.add_insn_out_hook(callback)
+        .expect("failed to add in hook");
+
+    assert_eq!(emu.emu_start(0x1000,
+                             0x1000 + x86_code32.len() as u64,
+                             10 * unicorn::SECOND_SCALE,
+                             1000),
+               Ok(()));
+    assert_eq!(expect, *insn_cell.borrow());
+    assert_eq!(emu.remove_hook(hook), Ok(()));
+}
+
+#[test]
+fn x86_insn_sys_callback() {
+    #[derive(PartialEq, Debug)]
+    struct InsnSysExpectation(u64);
+    let expect = InsnSysExpectation(0xdeadbeef);
+    let insn_cell = Rc::new(RefCell::new(InsnSysExpectation(0)));
+
+    let callback_insn = insn_cell.clone();
+    let callback = move |uc: &unicorn::Unicorn| {
+        println!("!!!!");
+        let rax = uc.reg_read(unicorn::RegisterX86::RAX as i32).unwrap();
+        *callback_insn.borrow_mut() = InsnSysExpectation(rax);
+    };
+
+    // MOV rax, 0xdeadbeef; SYSCALL;
+    let x86_code: Vec<u8> = vec![0x48, 0xB8, 0xEF, 0xBE, 0xAD, 0xDE, 0x00, 0x00, 0x00, 0x00, 0x0F,
+                                 0x05];
+
+    let mut emu = CpuX86::new(unicorn::Mode::MODE_64).expect("failed to instantiate emulator");
+    assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
+    assert_eq!(emu.mem_write(0x1000, &x86_code), Ok(()));
+
+    let hook = emu.add_insn_sys_hook(unicorn::InsnSysX86::SYSCALL, 1, 0, callback)
+        .expect("failed to add in hook");
+
+    assert_eq!(emu.emu_start(0x1000,
+                             0x1000 + x86_code.len() as u64,
                              10 * unicorn::SECOND_SCALE,
                              1000),
                Ok(()));
