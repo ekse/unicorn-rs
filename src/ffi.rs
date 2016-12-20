@@ -3,7 +3,6 @@ use std::os::raw::c_char;
 use unicorn_const::{Arch, MemRegion, Mode, Error, HookType, Query};
 use {uc_handle, uc_hook};
 
-#[link(name = "unicorn")]
 extern "C" {
     pub fn uc_version(major: *const u32, minor: *const u32) -> u32;
     pub fn uc_arch_supported(arch: Arch) -> bool;
