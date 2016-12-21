@@ -56,6 +56,32 @@ fn emulate_x86_negative_values() {
     assert_eq!(emu.reg_read_i32(unicorn::RegisterX86::EDX), Ok((-51)));
 }
 
+fn callback_lifetime_init() -> unicorn::CpuX86 {
+    let x86_code32: Vec<u8> = vec![0x41, 0x4a]; // INC ecx; DEC edx
+
+    let mut emu = CpuX86::new(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
+    assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
+    assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
+
+    let callback = move |uc: &unicorn::Unicorn, _: u64, _: u32| {
+        let ecx = uc.reg_read(unicorn::RegisterX86::ECX as i32).unwrap();
+        println!("ecx: {}", ecx);
+    };
+
+    emu.add_code_hook(unicorn::CodeHookType::CODE, 0x1000, 0x2000, callback)
+        .expect("failed to add code hook");
+    emu
+}
+
+#[test]
+fn test_callback_lifetime() {
+    let emu = callback_lifetime_init();
+    println!("Foobar");
+    assert_eq!(emu.emu_start(0x1000, 0x1002, 10 * unicorn::SECOND_SCALE, 1000),
+               Ok(()));
+    // Should not have crashed...
+}
+
 #[test]
 fn x86_code_callback() {
     #[derive(PartialEq, Debug)]
@@ -271,7 +297,7 @@ fn emulate_arm() {
 
     assert_eq!(emu.reg_write(unicorn::RegisterARM::SP, 12), Ok(()));
     assert_eq!(emu.reg_write(unicorn::RegisterARM::R0, 10), Ok(()));
-    
+
     // ARM checks the least significant bit of the address to know
     // if the code is in Thumb mode.
     assert_eq!(emu.emu_start(0x1000 | 0x01,
