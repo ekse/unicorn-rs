@@ -261,11 +261,11 @@ pub trait Cpu {
 trait Hookable {
     /// Add a code hook.
     fn add_code_hook<F>(&mut self,
-                            hook_type: CodeHookType,
-                            begin: u64,
-                            end: u64,
-                            callback: F)
-                            -> Result<uc_hook, Error>
+                        hook_type: CodeHookType,
+                        begin: u64,
+                        end: u64,
+                        callback: F)
+                        -> Result<uc_hook, Error>
         where F: FnMut(&Unicorn, u64, u32) + 'static;
 
     /// Add an interrupt hook.
@@ -274,11 +274,11 @@ trait Hookable {
 
     /// Add a memory hook.
     fn add_mem_hook<F>(&mut self,
-                           hook_type: MemHookType,
-                           begin: u64,
-                           end: u64,
-                           callback: F)
-                           -> Result<uc_hook, Error>
+                       hook_type: MemHookType,
+                       begin: u64,
+                       end: u64,
+                       callback: F)
+                       -> Result<uc_hook, Error>
         where F: FnMut(&Unicorn, MemType, u64, usize, i64) -> bool + 'static;
 
     /// Add an "in" instruction hook.
@@ -291,11 +291,11 @@ trait Hookable {
 
     /// Add a "syscall" or "sysenter" instruction hook.
     fn add_insn_sys_hook<F>(&mut self,
-                                insn_type: InsnSysX86,
-                                begin: u64,
-                                end: u64,
-                                callback: F)
-                                -> Result<uc_hook, Error>
+                            insn_type: InsnSysX86,
+                            begin: u64,
+                            end: u64,
+                            callback: F)
+                            -> Result<uc_hook, Error>
         where F: FnMut(&Unicorn) + 'static;
 }
 
@@ -612,11 +612,7 @@ impl Unicorn {
     pub fn reg_write(&self, regid: i32, value: u64) -> Result<(), Error> {
         let p_value: *const u64 = &value;
         let err = unsafe { uc_reg_write(self.handle, regid, p_value as *const libc::c_void) };
-        if err == Error::OK {
-            Ok(())
-        } else {
-            Err(err)
-        }
+        if err == Error::OK { Ok(()) } else { Err(err) }
     }
     /// Write a signed 32-bit value to a register.
     ///
@@ -630,11 +626,7 @@ impl Unicorn {
                          regid as libc::c_int,
                          p_value as *const libc::c_void)
         };
-        if err == Error::OK {
-            Ok(())
-        } else {
-            Err(err)
-        }
+        if err == Error::OK { Ok(()) } else { Err(err) }
     }
 
     /// Read an unsigned value from a register.
@@ -687,11 +679,7 @@ impl Unicorn {
                    perms: Protection)
                    -> Result<(), Error> {
         let err = unsafe { uc_mem_map(self.handle, address, size, perms.bits()) };
-        if err == Error::OK {
-            Ok(())
-        } else {
-            Err(err)
-        }
+        if err == Error::OK { Ok(()) } else { Err(err) }
     }
 
     /// Unmap a memory region.
@@ -700,11 +688,7 @@ impl Unicorn {
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
     pub fn mem_unmap(&self, address: u64, size: libc::size_t) -> Result<(), Error> {
         let err = unsafe { uc_mem_unmap(self.handle, address, size) };
-        if err == Error::OK {
-            Ok(())
-        } else {
-            Err(err)
-        }
+        if err == Error::OK { Ok(()) } else { Err(err) }
     }
 
     /// Write a range of bytes to memory at the specified address.
@@ -715,11 +699,7 @@ impl Unicorn {
                          bytes.as_ptr(),
                          bytes.len() as libc::size_t)
         };
-        if err == Error::OK {
-            Ok(())
-        } else {
-            Err(err)
-        }
+        if err == Error::OK { Ok(()) } else { Err(err) }
     }
 
     /// Read a range of bytes from memory at the specified address.
@@ -748,11 +728,7 @@ impl Unicorn {
     pub fn mem_protect(&self, address: u64, size: usize, perms: Protection) -> Result<(), Error> {
         let err =
             unsafe { uc_mem_protect(self.handle, address, size as libc::size_t, perms.bits()) };
-        if err == Error::OK {
-            Ok(())
-        } else {
-            Err(err)
-        }
+        if err == Error::OK { Ok(()) } else { Err(err) }
     }
 
     /// Returns a vector with the memory regions that are mapped in the emulator.
@@ -796,11 +772,7 @@ impl Unicorn {
                      -> Result<(), Error> {
         let err =
             unsafe { uc_emu_start(self.handle, begin, until, timeout, count as libc::size_t) };
-        if err == Error::OK {
-            Ok(())
-        } else {
-            Err(err)
-        }
+        if err == Error::OK { Ok(()) } else { Err(err) }
     }
 
     /// Stop the emulation.
@@ -809,11 +781,7 @@ impl Unicorn {
     /// NOTE: For now, this will stop the execution only after the current block.
     pub fn emu_stop(&self) -> Result<(), Error> {
         let err = unsafe { uc_emu_stop(self.handle) };
-        if err == Error::OK {
-            Ok(())
-        } else {
-            Err(err)
-        }
+        if err == Error::OK { Ok(()) } else { Err(err) }
     }
 
     /// Remove a hook.
@@ -829,11 +797,7 @@ impl Unicorn {
         self.insn_out_callbacks.remove(&hook);
         self.insn_sys_callbacks.remove(&hook);
 
-        if err == Error::OK {
-            Ok(())
-        } else {
-            Err(err)
-        }
+        if err == Error::OK { Ok(()) } else { Err(err) }
 
     }
 
@@ -865,11 +829,11 @@ impl Unicorn {
 impl Hookable for Box<Unicorn> {
     /// Add a code hook.
     fn add_code_hook<F>(&mut self,
-                            hook_type: CodeHookType,
-                            begin: u64,
-                            end: u64,
-                            callback: F)
-                            -> Result<uc_hook, Error>
+                        hook_type: CodeHookType,
+                        begin: u64,
+                        end: u64,
+                        callback: F)
+                        -> Result<uc_hook, Error>
         where F: FnMut(&Unicorn, u64, u32) + 'static
     {
         let mut hook: uc_hook = 0;
@@ -933,11 +897,11 @@ impl Hookable for Box<Unicorn> {
 
     /// Add a memory hook.
     fn add_mem_hook<F>(&mut self,
-                           hook_type: MemHookType,
-                           begin: u64,
-                           end: u64,
-                           callback: F)
-                           -> Result<uc_hook, Error>
+                       hook_type: MemHookType,
+                       begin: u64,
+                       end: u64,
+                       callback: F)
+                       -> Result<uc_hook, Error>
         where F: FnMut(&Unicorn, MemType, u64, usize, i64) -> bool + 'static
     {
         let mut hook: uc_hook = 0;
@@ -1036,11 +1000,11 @@ impl Hookable for Box<Unicorn> {
 
     /// Add a "syscall" or "sysenter" instruction hook.
     fn add_insn_sys_hook<F>(&mut self,
-                                insn_type: InsnSysX86,
-                                begin: u64,
-                                end: u64,
-                                callback: F)
-                                -> Result<uc_hook, Error>
+                            insn_type: InsnSysX86,
+                            begin: u64,
+                            end: u64,
+                            callback: F)
+                            -> Result<uc_hook, Error>
         where F: FnMut(&Unicorn) + 'static
     {
         let mut hook: uc_hook = 0;
