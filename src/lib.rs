@@ -184,14 +184,14 @@ pub trait Cpu {
                         end: u64,
                         callback: F)
                         -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u64, u32) -> () + 'static
+        where F: FnMut(&Unicorn, u64, u32) -> () + 'static
     {
         self.mut_emu().add_code_hook(hook_type, begin, end, callback)
     }
 
     /// Add an interrupt hook.
     fn add_intr_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32) + 'static
+        where F: FnMut(&Unicorn, u32) + 'static
     {
         self.mut_emu().add_intr_hook(callback)
     }
@@ -203,21 +203,21 @@ pub trait Cpu {
                        end: u64,
                        callback: F)
                        -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'static
+        where F: FnMut(&Unicorn, MemType, u64, usize, i64) -> bool + 'static
     {
         self.mut_emu().add_mem_hook(hook_type, begin, end, callback)
     }
 
     /// Add an "in" instruction hook.
     fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize) -> u32 + 'static
+        where F: FnMut(&Unicorn, u32, usize) -> u32 + 'static
     {
         self.mut_emu().add_insn_in_hook(callback)
     }
 
     /// Add an "out" instruction hook.
     fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize, u32) + 'static
+        where F: FnMut(&Unicorn, u32, usize, u32) + 'static
     {
         self.mut_emu().add_insn_out_hook(callback)
     }
@@ -229,7 +229,7 @@ pub trait Cpu {
                             end: u64,
                             callback: F)
                             -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn) + 'static
+        where F: FnMut(&Unicorn) + 'static
     {
         self.mut_emu().add_insn_sys_hook(insn_type, begin, end, callback)
     }
@@ -266,11 +266,11 @@ trait Hookable {
                             end: u64,
                             callback: F)
                             -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u64, u32) + 'static;
+        where F: FnMut(&Unicorn, u64, u32) + 'static;
 
     /// Add an interrupt hook.
     fn add_intr_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32) + 'static;
+        where F: FnMut(&Unicorn, u32) + 'static;
 
     /// Add a memory hook.
     fn add_mem_hook<F>(&mut self,
@@ -279,15 +279,15 @@ trait Hookable {
                            end: u64,
                            callback: F)
                            -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'static;
+        where F: FnMut(&Unicorn, MemType, u64, usize, i64) -> bool + 'static;
 
     /// Add an "in" instruction hook.
     fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize) -> u32 + 'static;
+        where F: FnMut(&Unicorn, u32, usize) -> u32 + 'static;
 
     /// Add an "out" instruction hook.
     fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize, u32) + 'static;
+        where F: FnMut(&Unicorn, u32, usize, u32) + 'static;
 
     /// Add a "syscall" or "sysenter" instruction hook.
     fn add_insn_sys_hook<F>(&mut self,
@@ -296,7 +296,7 @@ trait Hookable {
                                 end: u64,
                                 callback: F)
                                 -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn) + 'static;
+        where F: FnMut(&Unicorn) + 'static;
 }
 
 /// An ARM emulator instance.
@@ -526,12 +526,12 @@ extern "C" fn insn_sys_hook_proxy(_: uc_handle, user_data: *mut InsnSysHook) {
     (insn_hook.callback)(unsafe { &*insn_hook.unicorn });
 }
 
-type CodeHook = UnicornHook<Box<Fn(&Unicorn, u64, u32)>>;
-type IntrHook = UnicornHook<Box<Fn(&Unicorn, u32)>>;
-type MemHook = UnicornHook<Box<Fn(&Unicorn, MemType, u64, usize, i64) -> bool>>;
-type InsnInHook = UnicornHook<Box<Fn(&Unicorn, u32, usize) -> u32>>;
-type InsnOutHook = UnicornHook<Box<Fn(&Unicorn, u32, usize, u32)>>;
-type InsnSysHook = UnicornHook<Box<Fn(&Unicorn)>>;
+type CodeHook = UnicornHook<Box<FnMut(&Unicorn, u64, u32)>>;
+type IntrHook = UnicornHook<Box<FnMut(&Unicorn, u32)>>;
+type MemHook = UnicornHook<Box<FnMut(&Unicorn, MemType, u64, usize, i64) -> bool>>;
+type InsnInHook = UnicornHook<Box<FnMut(&Unicorn, u32, usize) -> u32>>;
+type InsnOutHook = UnicornHook<Box<FnMut(&Unicorn, u32, usize, u32)>>;
+type InsnSysHook = UnicornHook<Box<FnMut(&Unicorn)>>;
 
 /// Internal : A Unicorn emulator instance, use one of the Cpu structs instead.
 pub struct Unicorn {
@@ -870,7 +870,7 @@ impl Hookable for Box<Unicorn> {
                             end: u64,
                             callback: F)
                             -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u64, u32) + 'static
+        where F: FnMut(&Unicorn, u64, u32) + 'static
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
@@ -901,7 +901,7 @@ impl Hookable for Box<Unicorn> {
 
     /// Add an interrupt hook.
     fn add_intr_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32) + 'static
+        where F: FnMut(&Unicorn, u32) + 'static
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
@@ -938,7 +938,7 @@ impl Hookable for Box<Unicorn> {
                            end: u64,
                            callback: F)
                            -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'static
+        where F: FnMut(&Unicorn, MemType, u64, usize, i64) -> bool + 'static
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
@@ -970,7 +970,7 @@ impl Hookable for Box<Unicorn> {
 
     /// Add an "in" instruction hook.
     fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize) -> u32 + 'static
+        where F: FnMut(&Unicorn, u32, usize) -> u32 + 'static
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
@@ -1003,7 +1003,7 @@ impl Hookable for Box<Unicorn> {
 
     /// Add an "out" instruction hook.
     fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize, u32) + 'static
+        where F: FnMut(&Unicorn, u32, usize, u32) + 'static
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
@@ -1041,7 +1041,7 @@ impl Hookable for Box<Unicorn> {
                                 end: u64,
                                 callback: F)
                                 -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn) + 'static
+        where F: FnMut(&Unicorn) + 'static
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
