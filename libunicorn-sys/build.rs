@@ -11,8 +11,8 @@ fn main() {
     }
     let out_dir = env::var("OUT_DIR").unwrap();
     let _ = Command::new("./make.sh").current_dir("unicorn").status();
-    let capstone = "libunicorn.a";
-    let _ = Command::new("cp").current_dir("unicorn").arg(&capstone).arg(&out_dir).status();
+    let unicorn = "libunicorn.a";
+    let _ = Command::new("cp").current_dir("unicorn").arg(&unicorn).arg(&out_dir).status();
     println!("cargo:rustc-link-search=native={}", out_dir);
     println!("cargo:rustc-link-lib=static=unicorn");
 }
