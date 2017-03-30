@@ -86,11 +86,11 @@ pub flags Protection : u32 {
 #[derive(Debug, Clone)]
 pub struct MemRegion {
     /// The start address of the region (inclusive).
-    begin: u64,
+    pub begin: u64,
     /// The end address of the region (inclusive).
-    end: u64,
+    pub end: u64,
     /// The memory permissions of the region.
-    perms: Protection,
+    pub perms: Protection,
 }
 
 #[repr(C)]
