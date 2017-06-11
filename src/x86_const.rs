@@ -261,3 +261,10 @@ pub enum InsnSysX86 {
     SYSCALL = InsnX86::SYSCALL as isize,
     SYSENTER = InsnX86::SYSENTER as isize,
 }
+
+
+impl Into<i32> for RegisterX86 {
+    fn into(self) -> i32 {
+        self as i32
+    }
+}

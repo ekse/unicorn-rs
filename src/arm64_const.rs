@@ -266,3 +266,9 @@ pub enum RegisterARM64 {
     // pseudo registers
     PC = 260,
 }
+
+impl Into<i32> for RegisterARM64 {
+    fn into(self) -> i32 {
+        self as i32
+    }
+}

@@ -22,3 +22,9 @@ pub enum RegisterM68K {
     SR,
     PC,
 }
+
+impl Into<i32> for RegisterM68K {
+    fn into(self) -> i32 {
+        self as i32
+    }
+}

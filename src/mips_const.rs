@@ -154,3 +154,9 @@ pub enum RegisterMIPS {
     MPL1 = 135,
     MPL2 = 136,
 }
+
+impl Into<i32> for RegisterMIPS {
+    fn into(self) -> i32 {
+        self as i32
+    }
+}

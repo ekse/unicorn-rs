@@ -92,3 +92,9 @@ pub enum RegisterSPARC {
     XCC = 87,
     PC = 88,
 }
+
+impl Into<i32> for RegisterSPARC {
+    fn into(self) -> i32 {
+        self as i32
+    }
+}
