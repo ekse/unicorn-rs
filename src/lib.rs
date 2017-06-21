@@ -51,11 +51,11 @@ pub use ffi::unicorn_const;
 pub const BINDINGS_MAJOR: u32 = 1;
 pub const BINDINGS_MINOR: u32 = 0;
 
-pub struct Cpu {
-    emu: Unicorn,
+pub struct Cpu<'a> {
+    emu: Unicorn<'a>,
 }
 
-impl Cpu {
+impl<'a> Cpu<'a> {
     /// Read an unsigned value from a register.
     pub fn reg_read<R>(&self, reg: R) -> Result<u64, Error>
         where R: Into<i32>
@@ -157,14 +157,14 @@ impl Cpu {
                             end: u64,
                             callback: F)
                             -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u64, u32) -> () + 'static
+        where F: Fn(&Unicorn, u64, u32) -> () + 'a
     {
         self.emu.add_code_hook(hook_type, begin, end, callback)
     }
 
     /// Add an interrupt hook.
     pub fn add_intr_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32) + 'static
+        where F: Fn(&Unicorn, u32) + 'a
     {
         self.emu.add_intr_hook(callback)
     }
@@ -176,21 +176,21 @@ impl Cpu {
                            end: u64,
                            callback: F)
                            -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'static
+        where F: Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'a
     {
         self.emu.add_mem_hook(hook_type, begin, end, callback)
     }
 
     /// Add an "in" instruction hook.
     pub fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize) -> u32 + 'static
+        where F: Fn(&Unicorn, u32, usize) -> u32 + 'a
     {
         self.emu.add_insn_in_hook(callback)
     }
 
     /// Add an "out" instruction hook.
     pub fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize, u32) + 'static
+        where F: Fn(&Unicorn, u32, usize, u32) + 'a
     {
         self.emu.add_insn_out_hook(callback)
     }
@@ -202,7 +202,7 @@ impl Cpu {
                                 end: u64,
                                 callback: F)
                                 -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn) + 'static
+        where F: Fn(&Unicorn) + 'a
     {
         self.emu.add_insn_sys_hook(insn_type, begin, end, callback)
     }
@@ -232,36 +232,36 @@ impl Cpu {
 }
 
 /// Create an ARM emulator instance for the specified hardware mode.
-pub fn cpu_arm(mode: Mode) -> Result<Cpu, Error> {
+pub fn cpu_arm<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
     new_cpu(Arch::ARM, mode)
 }
 
 /// Create an ARM64 emulator instance for the specified hardware mode.
-pub fn cpu_arm64(mode: Mode) -> Result<Cpu, Error> {
+pub fn cpu_arm64<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
     new_cpu(Arch::ARM64, mode)
 }
 
 /// Create a M68K emulator instance for the specified hardware mode.
-pub fn cpu_m68k(mode: Mode) -> Result<Cpu, Error> {
+pub fn cpu_m68k<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
     new_cpu(Arch::M68K, mode)
 }
 
 /// Create an MIPS emulator instance for the specified hardware mode.
-pub fn cpu_mips(mode: Mode) -> Result<Cpu, Error> {
+pub fn cpu_mips<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
     new_cpu(Arch::MIPS, mode)
 }
 
 /// Create a SPARC emulator instance for the specified hardware mode.
-pub fn cpu_sparc(mode: Mode) -> Result<Cpu, Error> {
+pub fn cpu_sparc<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
     new_cpu(Arch::SPARC, mode)
 }
 
 /// Create an X86 emulator instance for the specified hardware mode.
-pub fn cpu_x86(mode: Mode) -> Result<Cpu, Error> {
+pub fn cpu_x86<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
     new_cpu(Arch::X86, mode)
 }
 
-pub fn new_cpu(arch: Arch, mode: Mode) -> Result<Cpu, Error> {
+pub fn new_cpu<'b>(arch: Arch, mode: Mode) -> Result<Cpu<'b>, Error> {
     let emu = Unicorn::new(arch, mode);
     match emu {
         Ok(x) => Ok(Cpu { emu: x }),
@@ -269,20 +269,20 @@ pub fn new_cpu(arch: Arch, mode: Mode) -> Result<Cpu, Error> {
     }
 }
 
-/// Struct to bind a unicorn instance to a callback.
-pub struct UnicornHook<F> {
-    unicorn: *const Unicorn,
-    callback: F,
+extern "C" fn code_hook_proxy(_: uc_handle, address: u64, size: u32, user_data: *mut Hook) {
+    let hook = unsafe { &mut *user_data };
+    match hook.callback {
+        HookCallback::Code(ref callback) => callback(unsafe { &*hook.unicorn }, address, size),
+        _ => panic!("Unknown code callback"),
+    }
 }
 
-extern "C" fn code_hook_proxy(_: uc_handle, address: u64, size: u32, user_data: *mut CodeHook) {
-    let code_hook = unsafe { &mut *user_data };
-    (code_hook.callback)(unsafe { &*code_hook.unicorn }, address, size);
-}
-
-extern "C" fn intr_hook_proxy(_: uc_handle, intno: u32, user_data: *mut IntrHook) {
-    let intr_hook = unsafe { &mut *user_data };
-    (intr_hook.callback)(unsafe { &*intr_hook.unicorn }, intno);
+extern "C" fn intr_hook_proxy(_: uc_handle, intno: u32, user_data: *mut Hook) {
+    let hook = unsafe { &mut *user_data };
+    match hook.callback {
+        HookCallback::Intr(ref callback) => callback(unsafe { &*hook.unicorn }, intno),
+        _ => panic!("Unknown intr callback"),
+    }
 }
 
 extern "C" fn mem_hook_proxy(_: uc_handle,
@@ -290,55 +290,69 @@ extern "C" fn mem_hook_proxy(_: uc_handle,
                              address: u64,
                              size: usize,
                              value: i64,
-                             user_data: *mut MemHook)
+                             user_data: *mut Hook)
                              -> bool {
-    let mem_hook = unsafe { &mut *user_data };
-    (mem_hook.callback)(unsafe { &*mem_hook.unicorn },
-                        mem_type,
-                        address,
-                        size,
-                        value)
+    let hook = unsafe { &mut *user_data };
+    match hook.callback {
+        HookCallback::Mem(ref callback) => {
+            callback(unsafe { &*hook.unicorn }, mem_type, address, size, value)
+        }
+        _ => panic!("Unknown mem callback"),
+    }
 }
 
 extern "C" fn insn_in_hook_proxy(_: uc_handle,
                                  port: u32,
                                  size: usize,
-                                 user_data: *mut InsnInHook)
+                                 user_data: *mut Hook)
                                  -> u32 {
-    let insn_hook = unsafe { &mut *user_data };
-    (insn_hook.callback)(unsafe { &*insn_hook.unicorn }, port, size)
+    let hook = unsafe { &mut *user_data };
+    match hook.callback {
+        HookCallback::InsnIn(ref callback) => callback(unsafe { &*hook.unicorn }, port, size),
+        _ => panic!("Unknown insnin callback"),
+    }
 }
 
 extern "C" fn insn_out_hook_proxy(_: uc_handle,
                                   port: u32,
                                   size: usize,
                                   value: u32,
-                                  user_data: *mut InsnOutHook) {
-    let insn_hook = unsafe { &mut *user_data };
-    (insn_hook.callback)(unsafe { &*insn_hook.unicorn }, port, size, value);
+                                  user_data: *mut Hook) {
+    let hook = unsafe { &mut *user_data };
+    match hook.callback {
+        HookCallback::InsnOut(ref callback) => {
+            callback(unsafe { &*hook.unicorn }, port, size, value)
+        }
+        _ => panic!("Unknown instout callback"),
+    }
 }
 
-extern "C" fn insn_sys_hook_proxy(_: uc_handle, user_data: *mut InsnSysHook) {
-    let insn_hook = unsafe { &mut *user_data };
-    (insn_hook.callback)(unsafe { &*insn_hook.unicorn });
+extern "C" fn insn_sys_hook_proxy(_: uc_handle, user_data: *mut Hook) {
+    let hook = unsafe { &mut *user_data };
+    match hook.callback {
+        HookCallback::InsnSys(ref callback) => callback(unsafe { &*hook.unicorn }),
+        _ => panic!("Unknown sys callback"),
+    }
 }
 
-type CodeHook = UnicornHook<Box<Fn(&Unicorn, u64, u32)>>;
-type IntrHook = UnicornHook<Box<Fn(&Unicorn, u32)>>;
-type MemHook = UnicornHook<Box<Fn(&Unicorn, MemType, u64, usize, i64) -> bool>>;
-type InsnInHook = UnicornHook<Box<Fn(&Unicorn, u32, usize) -> u32>>;
-type InsnOutHook = UnicornHook<Box<Fn(&Unicorn, u32, usize, u32)>>;
-type InsnSysHook = UnicornHook<Box<Fn(&Unicorn)>>;
+enum HookCallback<'a> {
+    Code(Box<Fn(&Unicorn, u64, u32) + 'a>),
+    Intr(Box<Fn(&Unicorn, u32) + 'a>),
+    Mem(Box<Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'a>),
+    InsnIn(Box<Fn(&Unicorn, u32, usize) -> u32 + 'a>),
+    InsnOut(Box<Fn(&Unicorn, u32, usize, u32) + 'a>),
+    InsnSys(Box<Fn(&Unicorn) + 'a>),
+}
+
+struct Hook<'a> {
+    callback: HookCallback<'a>,
+    unicorn: *const Unicorn<'a>,
+}
 
 /// Internal : A Unicorn emulator instance, use one of the Cpu structs instead.
-pub struct Unicorn {
+pub struct Unicorn<'a> {
     handle: libc::size_t, // Opaque handle to uc_engine
-    code_callbacks: HashMap<uc_hook, Box<CodeHook>>,
-    intr_callbacks: HashMap<uc_hook, Box<IntrHook>>,
-    mem_callbacks: HashMap<uc_hook, Box<MemHook>>,
-    insn_in_callbacks: HashMap<uc_hook, Box<InsnInHook>>,
-    insn_out_callbacks: HashMap<uc_hook, Box<InsnOutHook>>,
-    insn_sys_callbacks: HashMap<uc_hook, Box<InsnSysHook>>,
+    hooks: HashMap<uc_hook, Box<Hook<'a>>>, // for safe garbage collection?
 }
 
 /// Returns a tuple `(major, minor)` for the bindings version number.
@@ -364,10 +378,10 @@ pub fn arch_supported(arch: Arch) -> bool {
     unsafe { uc_arch_supported(arch) }
 }
 
-impl Unicorn {
+impl<'a> Unicorn<'a> {
     /// Create a new instance of the unicorn engine for the specified architecture
     /// and hardware mode.
-    pub fn new(arch: Arch, mode: Mode) -> Result<Unicorn, Error> {
+    pub fn new<'b>(arch: Arch, mode: Mode) -> Result<Unicorn<'b>, Error> {
         // Verify bindings compatibility with the core before going further.
         let (major, minor) = unicorn_version();
         if major != BINDINGS_MAJOR || minor != BINDINGS_MINOR {
@@ -379,12 +393,7 @@ impl Unicorn {
         if err == Error::OK {
             Ok(Unicorn {
                 handle: handle,
-                code_callbacks: HashMap::default(),
-                intr_callbacks: HashMap::default(),
-                mem_callbacks: HashMap::default(),
-                insn_in_callbacks: HashMap::default(),
-                insn_out_callbacks: HashMap::default(),
-                insn_sys_callbacks: HashMap::default(),
+                hooks: HashMap::default(),
             })
         } else {
             Err(err)
@@ -401,6 +410,7 @@ impl Unicorn {
         let err = unsafe { uc_reg_write(self.handle, regid, p_value as *const libc::c_void) };
         if err == Error::OK { Ok(()) } else { Err(err) }
     }
+
     /// Write a signed 32-bit value to a register.
     ///
     /// Note : The register is defined as an i32 to be able to support the
@@ -578,14 +588,14 @@ impl Unicorn {
                             end: u64,
                             callback: F)
                             -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u64, u32) + 'static
+        where F: Fn(&Unicorn, u64, u32) + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
 
-        let user_data = Box::new(CodeHook {
+        let user_data = Box::new(Hook {
             unicorn: self as *mut _,
-            callback: Box::new(callback),
+            callback: HookCallback::Code(Box::new(callback)),
         });
         let p_user_data: *mut libc::size_t = unsafe { mem::transmute(&*user_data) };
         let _callback: libc::size_t = code_hook_proxy as usize;
@@ -600,7 +610,7 @@ impl Unicorn {
                         end)
         };
         if err == Error::OK {
-            self.code_callbacks.insert(hook, user_data);
+            self.hooks.insert(hook, user_data);
             Ok(hook)
         } else {
             Err(err)
@@ -609,14 +619,14 @@ impl Unicorn {
 
     /// Add an interrupt hook.
     pub fn add_intr_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32) + 'static
+        where F: Fn(&Unicorn, u32) + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
 
-        let user_data = Box::new(IntrHook {
+        let user_data = Box::new(Hook {
             unicorn: self as *mut _,
-            callback: Box::new(callback),
+            callback: HookCallback::Intr(Box::new(callback)),
         });
         let p_user_data: *mut libc::size_t = unsafe { mem::transmute(&*user_data) };
         let _callback: libc::size_t = intr_hook_proxy as usize;
@@ -632,7 +642,7 @@ impl Unicorn {
         };
 
         if err == Error::OK {
-            self.intr_callbacks.insert(hook, user_data);
+            self.hooks.insert(hook, user_data);
             Ok(hook)
         } else {
             Err(err)
@@ -646,14 +656,14 @@ impl Unicorn {
                            end: u64,
                            callback: F)
                            -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'static
+        where F: Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
 
-        let user_data = Box::new(MemHook {
+        let user_data = Box::new(Hook {
             unicorn: self as *mut _,
-            callback: Box::new(callback),
+            callback: HookCallback::Mem(Box::new(callback)),
         });
         let p_user_data: *mut libc::size_t = unsafe { mem::transmute(&*user_data) };
         let _callback: libc::size_t = mem_hook_proxy as usize;
@@ -669,7 +679,7 @@ impl Unicorn {
         };
 
         if err == Error::OK {
-            self.mem_callbacks.insert(hook, user_data);
+            self.hooks.insert(hook, user_data);
             Ok(hook)
         } else {
             Err(err)
@@ -678,14 +688,14 @@ impl Unicorn {
 
     /// Add an "in" instruction hook.
     pub fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize) -> u32 + 'static
+        where F: Fn(&Unicorn, u32, usize) -> u32 + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
 
-        let user_data = Box::new(InsnInHook {
+        let user_data = Box::new(Hook {
             unicorn: self as *mut _,
-            callback: Box::new(callback),
+            callback: HookCallback::InsnIn(Box::new(callback)),
         });
         let p_user_data: *mut libc::size_t = unsafe { mem::transmute(&*user_data) };
         let _callback: libc::size_t = insn_in_hook_proxy as usize;
@@ -702,7 +712,7 @@ impl Unicorn {
         };
 
         if err == Error::OK {
-            self.insn_in_callbacks.insert(hook, user_data);
+            self.hooks.insert(hook, user_data);
             Ok(hook)
         } else {
             Err(err)
@@ -711,14 +721,14 @@ impl Unicorn {
 
     /// Add an "out" instruction hook.
     pub fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize, u32) + 'static
+        where F: Fn(&Unicorn, u32, usize, u32) + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
 
-        let user_data = Box::new(InsnOutHook {
+        let user_data = Box::new(Hook {
             unicorn: self as *mut _,
-            callback: Box::new(callback),
+            callback: HookCallback::InsnOut(Box::new(callback)),
         });
         let p_user_data: *mut libc::size_t = unsafe { mem::transmute(&*user_data) };
         let _callback: libc::size_t = insn_out_hook_proxy as usize;
@@ -735,7 +745,7 @@ impl Unicorn {
         };
 
         if err == Error::OK {
-            self.insn_out_callbacks.insert(hook, user_data);
+            self.hooks.insert(hook, user_data);
             Ok(hook)
         } else {
             Err(err)
@@ -749,14 +759,14 @@ impl Unicorn {
                                 end: u64,
                                 callback: F)
                                 -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn) + 'static
+        where F: Fn(&Unicorn) + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
 
-        let user_data = Box::new(InsnSysHook {
+        let user_data = Box::new(Hook {
             unicorn: self as *mut _,
-            callback: Box::new(callback),
+            callback: HookCallback::InsnSys(Box::new(callback)),
         });
         let p_user_data: *mut libc::size_t = unsafe { mem::transmute(&*user_data) };
         let _callback: libc::size_t = insn_sys_hook_proxy as usize;
@@ -773,7 +783,7 @@ impl Unicorn {
         };
 
         if err == Error::OK {
-            self.insn_sys_callbacks.insert(hook, user_data);
+            self.hooks.insert(hook, user_data);
             Ok(hook)
         } else {
             Err(err)
@@ -785,14 +795,7 @@ impl Unicorn {
     /// `hook` is the value returned by either `add_code_hook` or `add_mem_hook`.
     pub fn remove_hook(&mut self, hook: uc_hook) -> Result<(), Error> {
         let err = unsafe { uc_hook_del(self.handle, hook) } as Error;
-        // Check in all maps to find which one has the hook.
-        self.code_callbacks.remove(&hook);
-        self.intr_callbacks.remove(&hook);
-        self.mem_callbacks.remove(&hook);
-        self.insn_in_callbacks.remove(&hook);
-        self.insn_out_callbacks.remove(&hook);
-        self.insn_sys_callbacks.remove(&hook);
-
+        self.hooks.remove(&hook);
         if err == Error::OK { Ok(()) } else { Err(err) }
 
     }
@@ -822,7 +825,7 @@ impl Unicorn {
     }
 }
 
-impl Drop for Unicorn {
+impl<'a> Drop for Unicorn<'a> {
     fn drop(&mut self) {
         unsafe { uc_close(self.handle) };
     }
