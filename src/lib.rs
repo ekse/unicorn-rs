@@ -54,7 +54,7 @@ pub const BINDINGS_MINOR: u32 = 0;
 extern "C" fn code_hook_proxy(_: uc_handle, address: u64, size: u32, user_data: *mut Hook) {
     let hook = unsafe { &mut *user_data };
     match hook.callback {
-        HookCallback::Code(ref callback) => callback(unsafe { &*hook.unicorn }, address, size),
+        HookCallback::Code(ref callback) => callback(unsafe { &mut *hook.unicorn }, address, size),
         _ => panic!("Unknown code callback"),
     }
 }
@@ -62,7 +62,7 @@ extern "C" fn code_hook_proxy(_: uc_handle, address: u64, size: u32, user_data: 
 extern "C" fn intr_hook_proxy(_: uc_handle, intno: u32, user_data: *mut Hook) {
     let hook = unsafe { &mut *user_data };
     match hook.callback {
-        HookCallback::Intr(ref callback) => callback(unsafe { &*hook.unicorn }, intno),
+        HookCallback::Intr(ref callback) => callback(unsafe { &mut *hook.unicorn }, intno),
         _ => panic!("Unknown intr callback"),
     }
 }
@@ -77,7 +77,11 @@ extern "C" fn mem_hook_proxy(_: uc_handle,
     let hook = unsafe { &mut *user_data };
     match hook.callback {
         HookCallback::Mem(ref callback) => {
-            callback(unsafe { &*hook.unicorn }, mem_type, address, size, value)
+            callback(unsafe { &mut *hook.unicorn },
+                     mem_type,
+                     address,
+                     size,
+                     value)
         }
         _ => panic!("Unknown mem callback"),
     }
@@ -90,7 +94,7 @@ extern "C" fn insn_in_hook_proxy(_: uc_handle,
                                  -> u32 {
     let hook = unsafe { &mut *user_data };
     match hook.callback {
-        HookCallback::InsnIn(ref callback) => callback(unsafe { &*hook.unicorn }, port, size),
+        HookCallback::InsnIn(ref callback) => callback(unsafe { &mut *hook.unicorn }, port, size),
         _ => panic!("Unknown insnin callback"),
     }
 }
@@ -103,7 +107,7 @@ extern "C" fn insn_out_hook_proxy(_: uc_handle,
     let hook = unsafe { &mut *user_data };
     match hook.callback {
         HookCallback::InsnOut(ref callback) => {
-            callback(unsafe { &*hook.unicorn }, port, size, value)
+            callback(unsafe { &mut *hook.unicorn }, port, size, value)
         }
         _ => panic!("Unknown instout callback"),
     }
@@ -112,23 +116,23 @@ extern "C" fn insn_out_hook_proxy(_: uc_handle,
 extern "C" fn insn_sys_hook_proxy(_: uc_handle, user_data: *mut Hook) {
     let hook = unsafe { &mut *user_data };
     match hook.callback {
-        HookCallback::InsnSys(ref callback) => callback(unsafe { &*hook.unicorn }),
+        HookCallback::InsnSys(ref callback) => callback(unsafe { &mut *hook.unicorn }),
         _ => panic!("Unknown sys callback"),
     }
 }
 
 enum HookCallback<'a> {
-    Code(Box<Fn(&Unicorn, u64, u32) + 'a>),
-    Intr(Box<Fn(&Unicorn, u32) + 'a>),
-    Mem(Box<Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'a>),
-    InsnIn(Box<Fn(&Unicorn, u32, usize) -> u32 + 'a>),
-    InsnOut(Box<Fn(&Unicorn, u32, usize, u32) + 'a>),
-    InsnSys(Box<Fn(&Unicorn) + 'a>),
+    Code(Box<Fn(&mut Unicorn, u64, u32) + 'a>),
+    Intr(Box<Fn(&mut Unicorn, u32) + 'a>),
+    Mem(Box<Fn(&mut Unicorn, MemType, u64, usize, i64) -> bool + 'a>),
+    InsnIn(Box<Fn(&mut Unicorn, u32, usize) -> u32 + 'a>),
+    InsnOut(Box<Fn(&mut Unicorn, u32, usize, u32) + 'a>),
+    InsnSys(Box<Fn(&mut Unicorn) + 'a>),
 }
 
 struct Hook<'a> {
     callback: HookCallback<'a>,
-    unicorn: *const Unicorn<'a>,
+    unicorn: *mut Unicorn<'a>,
 }
 
 /// Internal : A Unicorn emulator instance, use one of the Cpu structs instead.
@@ -379,7 +383,7 @@ impl<'a> Unicorn<'a> {
                             end: u64,
                             callback: F)
                             -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u64, u32) + 'a
+        where F: Fn(&mut Unicorn, u64, u32) + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
@@ -410,7 +414,7 @@ impl<'a> Unicorn<'a> {
 
     /// Add an interrupt hook.
     pub fn add_intr_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32) + 'a
+        where F: Fn(&mut Unicorn, u32) + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
@@ -447,7 +451,7 @@ impl<'a> Unicorn<'a> {
                            end: u64,
                            callback: F)
                            -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'a
+        where F: Fn(&mut Unicorn, MemType, u64, usize, i64) -> bool + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
@@ -479,7 +483,7 @@ impl<'a> Unicorn<'a> {
 
     /// Add an "in" instruction hook.
     pub fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize) -> u32 + 'a
+        where F: Fn(&mut Unicorn, u32, usize) -> u32 + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
@@ -512,7 +516,7 @@ impl<'a> Unicorn<'a> {
 
     /// Add an "out" instruction hook.
     pub fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize, u32) + 'a
+        where F: Fn(&mut Unicorn, u32, usize, u32) + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
@@ -550,7 +554,7 @@ impl<'a> Unicorn<'a> {
                                 end: u64,
                                 callback: F)
                                 -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn) + 'a
+        where F: Fn(&mut Unicorn) + 'a
     {
         let mut hook: uc_hook = 0;
         let p_hook: *mut libc::size_t = &mut hook;
