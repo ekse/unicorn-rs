@@ -7,12 +7,12 @@
 //! ```rust
 //! extern crate unicorn;
 //!
-//! use unicorn::cpu_x86;
+//! use unicorn::Unicorn;
 //!
 //! fn main() {
 //!    let x86_code32 : Vec<u8> = vec![0x41, 0x4a]; // INC ecx; DEC edx
 //!
-//!    let mut emu = cpu_x86(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
+//!    let mut emu = Unicorn::new(unicorn::Arch::X86, unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
 //!    emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL);
 //!    emu.mem_write(0x1000, &x86_code32);
 //!    emu.reg_write_i32(unicorn::RegisterX86::ECX, -10);
@@ -50,224 +50,6 @@ pub use ffi::unicorn_const;
 
 pub const BINDINGS_MAJOR: u32 = 1;
 pub const BINDINGS_MINOR: u32 = 0;
-
-pub struct Cpu<'a> {
-    emu: Unicorn<'a>,
-}
-
-impl<'a> Cpu<'a> {
-    /// Read an unsigned value from a register.
-    pub fn reg_read<R>(&self, reg: R) -> Result<u64, Error>
-        where R: Into<i32>
-    {
-        self.emu.reg_read(reg.into())
-    }
-
-    /// Read a signed 32-bit value from a register.
-    pub fn reg_read_i32<R>(&self, reg: R) -> Result<i32, Error>
-        where R: Into<i32>
-    {
-        self.emu.reg_read_i32(reg.into())
-    }
-
-    /// Write an unsigned value register.
-    pub fn reg_write<R>(&mut self, reg: R, value: u64) -> Result<(), Error>
-        where R: Into<i32>
-    {
-        self.emu.reg_write(reg.into(), value)
-    }
-
-    /// Write a signed 32-bit value to a register.
-    pub fn reg_write_i32<R>(&self, reg: R, value: i32) -> Result<(), Error>
-        where R: Into<i32>
-    {
-        self.emu.reg_write_i32(reg.into(), value)
-    }
-
-    /// Map a memory region in the emulator at the specified address.
-    ///
-    /// `address` must be aligned to 4kb or this will return `Error::ARG`.
-    /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_map(&self,
-                   address: u64,
-                   size: libc::size_t,
-                   perms: Protection)
-                   -> Result<(), Error> {
-        self.emu.mem_map(address, size, perms)
-    }
-
-    /// Unmap a memory region.
-    ///
-    /// `address` must be aligned to 4kb or this will return `Error::ARG`.
-    /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_unmap(&self, address: u64, size: libc::size_t) -> Result<(), Error> {
-        self.emu.mem_unmap(address, size)
-    }
-
-    /// Write a range of bytes to memory at the specified address.
-    pub fn mem_write(&self, address: u64, bytes: &[u8]) -> Result<(), Error> {
-        self.emu.mem_write(address, bytes)
-    }
-
-    /// Read a range of bytes from memory at the specified address.
-    pub fn mem_read(&self, address: u64, size: usize) -> Result<(Vec<u8>), Error> {
-        self.emu.mem_read(address, size)
-    }
-
-    /// Set the memory permissions for an existing memory region.
-    ///
-    /// `address` must be aligned to 4kb or this will return `Error::ARG`.
-    /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_protect(&self, address: u64, size: usize, perms: Protection) -> Result<(), Error> {
-        self.emu.mem_protect(address, size, perms)
-    }
-
-    /// Returns a vector with the memory regions that are mapped in the emulator.
-    pub fn mem_regions(&self) -> Result<Vec<MemRegion>, Error> {
-        self.emu.mem_regions()
-    }
-
-    /// Emulate machine code for a specified duration.
-    ///
-    /// `begin` is the address where to start the emulation. The emulation stops if `until`
-    /// is hit. `timeout` specifies a duration in microseconds after which the emulation is
-    /// stopped (infinite execution if set to 0). `count` is the maximum number of instructions
-    /// to emulate (emulate all the available instructions if set to 0).
-    pub fn emu_start(&self,
-                     begin: u64,
-                     until: u64,
-                     timeout: u64,
-                     count: usize)
-                     -> Result<(), Error> {
-        self.emu.emu_start(begin, until, timeout, count)
-    }
-
-    /// Stop the emulation.
-    ///
-    /// This is usually called from callback function in hooks.
-    /// NOTE: For now, this will stop the execution only after the current block.
-    pub fn emu_stop(&self) -> Result<(), Error> {
-        self.emu.emu_stop()
-    }
-
-    /// Add a code hook.
-    pub fn add_code_hook<F>(&mut self,
-                            hook_type: CodeHookType,
-                            begin: u64,
-                            end: u64,
-                            callback: F)
-                            -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u64, u32) -> () + 'a
-    {
-        self.emu.add_code_hook(hook_type, begin, end, callback)
-    }
-
-    /// Add an interrupt hook.
-    pub fn add_intr_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32) + 'a
-    {
-        self.emu.add_intr_hook(callback)
-    }
-
-    /// Add a memory hook.
-    pub fn add_mem_hook<F>(&mut self,
-                           hook_type: MemHookType,
-                           begin: u64,
-                           end: u64,
-                           callback: F)
-                           -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, MemType, u64, usize, i64) -> bool + 'a
-    {
-        self.emu.add_mem_hook(hook_type, begin, end, callback)
-    }
-
-    /// Add an "in" instruction hook.
-    pub fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize) -> u32 + 'a
-    {
-        self.emu.add_insn_in_hook(callback)
-    }
-
-    /// Add an "out" instruction hook.
-    pub fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn, u32, usize, u32) + 'a
-    {
-        self.emu.add_insn_out_hook(callback)
-    }
-
-    /// Add a "syscall" or "sysenter" instruction hook.
-    pub fn add_insn_sys_hook<F>(&mut self,
-                                insn_type: InsnSysX86,
-                                begin: u64,
-                                end: u64,
-                                callback: F)
-                                -> Result<uc_hook, Error>
-        where F: Fn(&Unicorn) + 'a
-    {
-        self.emu.add_insn_sys_hook(insn_type, begin, end, callback)
-    }
-    /// Remove a hook.
-    ///
-    /// `hook` is the value returned by either `add_code_hook` or `add_mem_hook`.
-    pub fn remove_hook(&mut self, hook: uc_hook) -> Result<(), Error> {
-        self.emu.remove_hook(hook)
-    }
-
-    /// Return the last error code when an API function failed.
-    ///
-    /// Like glibc errno(), this function might not retain its old value once accessed.
-    pub fn errno(&self) -> Error {
-        self.emu.errno()
-    }
-
-    /// Query the internal status of the engine.
-    ///
-    /// Supported queries :
-    ///
-    /// - `Query::PAGE_SIZE` : the page size used by the emulator.
-    /// - `Query::MODE` : the current hardware mode.
-    pub fn query(&self, query: Query) -> Result<usize, Error> {
-        self.emu.query(query)
-    }
-}
-
-/// Create an ARM emulator instance for the specified hardware mode.
-pub fn cpu_arm<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
-    new_cpu(Arch::ARM, mode)
-}
-
-/// Create an ARM64 emulator instance for the specified hardware mode.
-pub fn cpu_arm64<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
-    new_cpu(Arch::ARM64, mode)
-}
-
-/// Create a M68K emulator instance for the specified hardware mode.
-pub fn cpu_m68k<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
-    new_cpu(Arch::M68K, mode)
-}
-
-/// Create an MIPS emulator instance for the specified hardware mode.
-pub fn cpu_mips<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
-    new_cpu(Arch::MIPS, mode)
-}
-
-/// Create a SPARC emulator instance for the specified hardware mode.
-pub fn cpu_sparc<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
-    new_cpu(Arch::SPARC, mode)
-}
-
-/// Create an X86 emulator instance for the specified hardware mode.
-pub fn cpu_x86<'b>(mode: Mode) -> Result<Cpu<'b>, Error> {
-    new_cpu(Arch::X86, mode)
-}
-
-pub fn new_cpu<'b>(arch: Arch, mode: Mode) -> Result<Cpu<'b>, Error> {
-    let emu = Unicorn::new(arch, mode);
-    match emu {
-        Ok(x) => Ok(Cpu { emu: x }),
-        Err(x) => Err(x),
-    }
-}
 
 extern "C" fn code_hook_proxy(_: uc_handle, address: u64, size: u32, user_data: *mut Hook) {
     let hook = unsafe { &mut *user_data };
@@ -405,9 +187,11 @@ impl<'a> Unicorn<'a> {
     /// Note : The register is defined as an i32 to be able to support the
     /// different register types (`RegisterX86`, `RegisterARM`, `RegisterMIPS` etc.).
     /// You need to cast the register with `as i32`.
-    pub fn reg_write(&self, regid: i32, value: u64) -> Result<(), Error> {
+    pub fn reg_write<R>(&mut self, reg: R, value: u64) -> Result<(), Error>
+        where R: Into<i32>
+    {
         let p_value: *const u64 = &value;
-        let err = unsafe { uc_reg_write(self.handle, regid, p_value as *const libc::c_void) };
+        let err = unsafe { uc_reg_write(self.handle, reg.into(), p_value as *const libc::c_void) };
         if err == Error::OK { Ok(()) } else { Err(err) }
     }
 
@@ -415,12 +199,13 @@ impl<'a> Unicorn<'a> {
     ///
     /// Note : The register is defined as an i32 to be able to support the
     /// different register types (`RegisterX86`, `RegisterARM`, `RegisterMIPS` etc.).
-    /// You need to cast the register with `as i32`.
-    pub fn reg_write_i32(&self, regid: i32, value: i32) -> Result<(), Error> {
+    pub fn reg_write_i32<R>(&mut self, reg: R, value: i32) -> Result<(), Error>
+        where R: Into<i32>
+    {
         let p_value: *const i32 = &value;
         let err = unsafe {
             uc_reg_write(self.handle,
-                         regid as libc::c_int,
+                         reg.into() as libc::c_int,
                          p_value as *const libc::c_void)
         };
         if err == Error::OK { Ok(()) } else { Err(err) }
@@ -430,13 +215,14 @@ impl<'a> Unicorn<'a> {
     ///
     /// Note : The register is defined as an i32 to be able to support the
     /// different register types (`RegisterX86`, `RegisterARM`, `RegisterMIPS` etc.).
-    /// You need to cast the register with `as i32`.
-    pub fn reg_read(&self, regid: i32) -> Result<u64, Error> {
+    pub fn reg_read<R>(&self, reg: R) -> Result<u64, Error>
+        where R: Into<i32>
+    {
         let mut value: u64 = 0;
         let p_value: *mut u64 = &mut value;
         let err = unsafe {
             uc_reg_read(self.handle,
-                        regid as libc::c_int,
+                        reg.into() as libc::c_int,
                         p_value as *mut libc::c_void)
         };
         if err == Error::OK {
@@ -450,13 +236,14 @@ impl<'a> Unicorn<'a> {
     ///
     /// Note : The register is defined as an i32 to be able to support the
     /// different register types (`RegisterX86`, `RegisterARM`, `RegisterMIPS` etc.).
-    /// You need to cast the register with `as i32`.
-    pub fn reg_read_i32(&self, regid: i32) -> Result<i32, Error> {
+    pub fn reg_read_i32<R>(&self, reg: R) -> Result<i32, Error>
+        where R: Into<i32>
+    {
         let mut value: i32 = 0;
         let p_value: *mut i32 = &mut value;
         let err = unsafe {
             uc_reg_read(self.handle,
-                        regid as libc::c_int,
+                        reg.into() as libc::c_int,
                         p_value as *mut libc::c_void)
         };
         if err == Error::OK {
@@ -470,7 +257,7 @@ impl<'a> Unicorn<'a> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_map(&self,
+    pub fn mem_map(&mut self,
                    address: u64,
                    size: libc::size_t,
                    perms: Protection)
@@ -483,7 +270,7 @@ impl<'a> Unicorn<'a> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_unmap(&self, address: u64, size: libc::size_t) -> Result<(), Error> {
+    pub fn mem_unmap(&mut self, address: u64, size: libc::size_t) -> Result<(), Error> {
         let err = unsafe { uc_mem_unmap(self.handle, address, size) };
         if err == Error::OK { Ok(()) } else { Err(err) }
     }
@@ -522,7 +309,11 @@ impl<'a> Unicorn<'a> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_protect(&self, address: u64, size: usize, perms: Protection) -> Result<(), Error> {
+    pub fn mem_protect(&mut self,
+                       address: u64,
+                       size: usize,
+                       perms: Protection)
+                       -> Result<(), Error> {
         let err =
             unsafe { uc_mem_protect(self.handle, address, size as libc::size_t, perms.bits()) };
         if err == Error::OK { Ok(()) } else { Err(err) }
@@ -561,7 +352,7 @@ impl<'a> Unicorn<'a> {
     /// is hit. `timeout` specifies a duration in microseconds after which the emulation is
     /// stopped (infinite execution if set to 0). `count` is the maximum number of instructions
     /// to emulate (emulate all the available instructions if set to 0).
-    pub fn emu_start(&self,
+    pub fn emu_start(&mut self,
                      begin: u64,
                      until: u64,
                      timeout: u64,
@@ -576,7 +367,7 @@ impl<'a> Unicorn<'a> {
     ///
     /// This is usually called from callback function in hooks.
     /// NOTE: For now, this will stop the execution only after the current block.
-    pub fn emu_stop(&self) -> Result<(), Error> {
+    pub fn emu_stop(&mut self) -> Result<(), Error> {
         let err = unsafe { uc_emu_stop(self.handle) };
         if err == Error::OK { Ok(()) } else { Err(err) }
     }
