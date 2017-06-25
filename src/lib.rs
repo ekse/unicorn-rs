@@ -618,6 +618,40 @@ impl<'a> Unicorn<'a> {
             Err(err)
         }
     }
+
+    // x86 only, read Model-specific register (msr,rdmsr)
+    pub fn x86_msr_read(&self, msr: X86MSR) -> Result<u64, Error> {
+        let mut value = uc_x86_msr {
+            msr: msr as u32,
+            value: 0,
+        };
+        let p_value: *mut uc_x86_msr = &mut value;
+        let err = unsafe {
+            uc_reg_read(self.handle,
+                        (RegisterX86::MSR as i32) as libc::c_int,
+                        p_value as *mut libc::c_void)
+        };
+        if err == Error::OK {
+            Ok(value.value)
+        } else {
+            Err(err)
+        }
+    }
+
+    // x86 only, write Model-specific register (msr,wrmsr)
+    pub fn x86_msr_write(&mut self, msr: X86MSR, value: u64) -> Result<(), Error> {
+        let v = uc_x86_msr {
+            msr: msr as u32,
+            value: value,
+        };
+        let p_value: *const uc_x86_msr = &v;
+        let err = unsafe {
+            uc_reg_write(self.handle,
+                         RegisterX86::MSR as i32,
+                         p_value as *const libc::c_void)
+        };
+        if err == Error::OK { Ok(()) } else { Err(err) }
+    }
 }
 
 impl<'a> Drop for Unicorn<'a> {

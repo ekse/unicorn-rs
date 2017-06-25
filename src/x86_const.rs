@@ -244,6 +244,13 @@ pub enum RegisterX86 {
     R13W,
     R14W,
     R15W,
+    IDTR,
+    GDTR,
+    LDTR,
+    TR,
+    FPCW,
+    FPTAG,
+    MSR,
 }
 
 #[repr(C)]
@@ -260,6 +267,13 @@ pub enum InsnX86 {
 pub enum InsnSysX86 {
     SYSCALL = InsnX86::SYSCALL as isize,
     SYSENTER = InsnX86::SYSENTER as isize,
+}
+
+#[repr(C)]
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum X86MSR {
+    FS = 0xC0000100,
+    GS = 0xC0000101,
 }
 
 

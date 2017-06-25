@@ -13,6 +13,13 @@ pub type uc_handle = libc::size_t;
 #[allow(non_camel_case_types)]
 pub type uc_hook = libc::size_t;
 
+#[repr(C)]
+#[allow(non_camel_case_types)]
+pub struct uc_x86_msr {
+    pub msr: u32,
+    pub value: u64,
+}
+
 extern "C" {
     pub fn uc_version(major: *const u32, minor: *const u32) -> u32;
     pub fn uc_arch_supported(arch: Arch) -> bool;
