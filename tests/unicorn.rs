@@ -28,7 +28,8 @@ fn emulate_x86() {
     assert_eq!(emu.emu_start(0x1000,
                              (0x1000 + x86_code32.len()) as u64,
                              10 * unicorn::SECOND_SCALE,
-                             1000),
+                             1000,
+                             &mut ()),
                Ok(()));
     assert_eq!(emu.reg_read(unicorn::RegisterX86::ECX), Ok((11)));
     assert_eq!(emu.reg_read(unicorn::RegisterX86::EDX), Ok((49)));
@@ -52,7 +53,8 @@ fn emulate_x86_negative_values() {
     assert_eq!(emu.emu_start(0x1000,
                              (0x1000 + x86_code32.len()) as u64,
                              10 * unicorn::SECOND_SCALE,
-                             1000),
+                             1000,
+                             &mut ()),
                Ok(()));
     assert_eq!(emu.reg_read_i32(unicorn::RegisterX86::ECX), Ok((-9)));
     assert_eq!(emu.reg_read_i32(unicorn::RegisterX86::EDX), Ok((-51)));
@@ -67,21 +69,21 @@ fn x86_code_callback() {
     let codes_cell = Rc::new(RefCell::new(codes));
 
     let callback_codes = codes_cell.clone();
-    let callback = move |_: &unicorn::Unicorn, address: u64, size: u32| {
+    let callback = move |_: &mut unicorn::Unicorn<()>, _: &mut (), address: u64, size: u32| {
         let mut codes = callback_codes.borrow_mut();
         codes.push(CodeExpectation(address, size));
     };
 
     let x86_code32: Vec<u8> = vec![0x41, 0x4a]; // INC ecx; DEC edx
 
-    let mut emu = Unicorn::new(unicorn::Arch::X86, unicorn::Mode::MODE_32)
+    let mut emu = Unicorn::<()>::new(unicorn::Arch::X86, unicorn::Mode::MODE_32)
         .expect("failed to instantiate emulator");
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
 
     let hook = emu.add_code_hook(unicorn::CodeHookType::CODE, 0x1000, 0x2000, callback)
         .expect("failed to add code hook");
-    assert_eq!(emu.emu_start(0x1000, 0x1002, 10 * unicorn::SECOND_SCALE, 1000),
+    assert_eq!(emu.emu_start(0x1000, 0x1002, 10 * unicorn::SECOND_SCALE, 1000, &mut ()),
                Ok(()));
     assert_eq!(expects, *codes_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
@@ -95,13 +97,13 @@ fn x86_intr_callback() {
     let intr_cell = Rc::new(RefCell::new(IntrExpectation(0)));
 
     let callback_intr = intr_cell.clone();
-    let callback = move |_: &unicorn::Unicorn, intno: u32| {
+    let callback = move |_: &mut unicorn::Unicorn<()>, _: &mut (), intno: u32| {
         *callback_intr.borrow_mut() = IntrExpectation(intno);
     };
 
     let x86_code32: Vec<u8> = vec![0xcd, 0x80]; // INT 0x80;
 
-    let mut emu = Unicorn::new(unicorn::Arch::X86, unicorn::Mode::MODE_32)
+    let mut emu = Unicorn::<()>::new(unicorn::Arch::X86, unicorn::Mode::MODE_32)
         .expect("failed to instantiate emulator");
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
@@ -112,7 +114,8 @@ fn x86_intr_callback() {
     assert_eq!(emu.emu_start(0x1000,
                              0x1000 + x86_code32.len() as u64,
                              10 * unicorn::SECOND_SCALE,
-                             1000),
+                             1000,
+                             &mut ()),
                Ok(()));
     assert_eq!(expect, *intr_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
@@ -128,7 +131,8 @@ fn x86_mem_callback() {
     let mems_cell = Rc::new(RefCell::new(mems));
 
     let callback_mems = mems_cell.clone();
-    let callback = move |_: &unicorn::Unicorn,
+    let callback = move |_: &mut unicorn::Unicorn<()>,
+                         _: &mut (),
                          mem_type: unicorn::MemType,
                          address: u64,
                          size: usize,
@@ -144,7 +148,7 @@ fn x86_mem_callback() {
     let x86_code32: Vec<u8> = vec![0xB8, 0xEF, 0xBE, 0xAD, 0xDE, 0xA3, 0x00, 0x20, 0x00, 0x00,
                                    0xA1, 0x00, 0x00, 0x01, 0x00];
 
-    let mut emu = Unicorn::new(unicorn::Arch::X86, unicorn::Mode::MODE_32)
+    let mut emu = Unicorn::<()>::new(unicorn::Arch::X86, unicorn::Mode::MODE_32)
         .expect("failed to instantiate emulator");
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
@@ -155,7 +159,8 @@ fn x86_mem_callback() {
     assert_eq!(emu.emu_start(0x1000,
                              0x1000 + x86_code32.len() as u64,
                              10 * unicorn::SECOND_SCALE,
-                             0x1000),
+                             0x1000,
+                             &mut ()),
                Err((unicorn::Error::READ_UNMAPPED)));
 
     assert_eq!(expects, *mems_cell.borrow());
@@ -170,7 +175,7 @@ fn x86_insn_in_callback() {
     let insn_cell = Rc::new(RefCell::new(InsnInExpectation(0, 0)));
 
     let callback_insn = insn_cell.clone();
-    let callback = move |_: &unicorn::Unicorn, port: u32, size: usize| {
+    let callback = move |_: &mut unicorn::Unicorn<()>, _: &mut (), port: u32, size: usize| {
         *callback_insn.borrow_mut() = InsnInExpectation(port, size);
         return 0;
     };
@@ -188,7 +193,8 @@ fn x86_insn_in_callback() {
     assert_eq!(emu.emu_start(0x1000,
                              0x1000 + x86_code32.len() as u64,
                              10 * unicorn::SECOND_SCALE,
-                             1000),
+                             1000,
+                             &mut ()),
                Ok(()));
     assert_eq!(expect, *insn_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
@@ -202,9 +208,10 @@ fn x86_insn_out_callback() {
     let insn_cell = Rc::new(RefCell::new(InsnOutExpectation(0, 0, 0)));
 
     let callback_insn = insn_cell.clone();
-    let callback = move |_: &unicorn::Unicorn, port: u32, size: usize, value: u32| {
-        *callback_insn.borrow_mut() = InsnOutExpectation(port, size, value);
-    };
+    let callback =
+        move |_: &mut unicorn::Unicorn<()>, _: &mut (), port: u32, size: usize, value: u32| {
+            *callback_insn.borrow_mut() = InsnOutExpectation(port, size, value);
+        };
 
     let x86_code32: Vec<u8> = vec![0xb0, 0x32, 0xe6, 0x46]; // MOV al, 0x32; OUT  0x46, al;
 
@@ -219,7 +226,8 @@ fn x86_insn_out_callback() {
     assert_eq!(emu.emu_start(0x1000,
                              0x1000 + x86_code32.len() as u64,
                              10 * unicorn::SECOND_SCALE,
-                             1000),
+                             1000,
+                             &mut ()),
                Ok(()));
     assert_eq!(expect, *insn_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
@@ -233,7 +241,7 @@ fn x86_insn_sys_callback() {
     let insn_cell = Rc::new(RefCell::new(InsnSysExpectation(0)));
 
     let callback_insn = insn_cell.clone();
-    let callback = move |uc: &unicorn::Unicorn| {
+    let callback = move |uc: &mut unicorn::Unicorn<()>, _: &mut ()| {
         println!("!!!!");
         let rax = uc.reg_read(unicorn::RegisterX86::RAX as i32).unwrap();
         *callback_insn.borrow_mut() = InsnSysExpectation(rax);
@@ -254,7 +262,8 @@ fn x86_insn_sys_callback() {
     assert_eq!(emu.emu_start(0x1000,
                              0x1000 + x86_code.len() as u64,
                              10 * unicorn::SECOND_SCALE,
-                             1000),
+                             1000,
+                             &mut ()),
                Ok(()));
     assert_eq!(expect, *insn_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
@@ -286,7 +295,8 @@ fn emulate_arm() {
     assert_eq!(emu.emu_start(0x1000 | 0x01,
                              (0x1000 | 0x01 + arm_code32.len()) as u64,
                              10 * unicorn::SECOND_SCALE,
-                             1000),
+                             1000,
+                             &mut ()),
                Ok(()));
     assert_eq!(emu.reg_read(unicorn::RegisterARM::SP), Ok((0)));
     assert_eq!(emu.reg_read(unicorn::RegisterARM::R0), Ok((10)));
@@ -306,15 +316,40 @@ fn emulate_mips() {
     assert_eq!(emu.emu_start(0x1000,
                              (0x1000 + mips_code32.len()) as u64,
                              10 * unicorn::SECOND_SCALE,
-                             1000),
+                             1000,
+                             &mut ()),
                Ok(()));
     assert_eq!(emu.reg_read(unicorn::RegisterMIPS::AT), Ok((0x3456)));
 }
 
 #[test]
 fn mem_unmapping() {
-    let mut emu = Unicorn::new(unicorn::Arch::X86, unicorn::Mode::MODE_32)
+    let mut emu = Unicorn::<()>::new(unicorn::Arch::X86, unicorn::Mode::MODE_32)
         .expect("failed to instantiate emulator");
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_unmap(0x1000, 0x4000), Ok(()));
+}
+
+#[test]
+fn mutable_run_data() {
+    let nops = vec![0x90, 0x90, 0x90, 0x90]; // nop nop nop nop
+    let mut emu = Unicorn::<u64>::new(unicorn::Arch::X86, unicorn::Mode::MODE_32)
+        .expect("failed to instantiate emulator");
+    assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
+    assert_eq!(emu.mem_write(0x1000, &nops), Ok(()));
+    emu.add_code_hook(unicorn::CodeHookType::CODE,
+                       0,
+                       0x4000,
+                       |_: &mut unicorn::Unicorn<u64>, count: &mut u64, _, _| {
+                           *count += 1;
+                       })
+        .expect("failed to add hook to emulator");
+    let mut count = 0;
+    assert_eq!(emu.emu_start(0x1000,
+                             (0x1000 + nops.len()) as u64,
+                             10 * unicorn::SECOND_SCALE,
+                             1000,
+                             &mut count),
+               Ok(()));
+    assert_eq!(count, 4);
 }

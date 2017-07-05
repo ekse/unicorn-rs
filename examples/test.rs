@@ -10,7 +10,7 @@ fn main() {
              unicorn::arch_supported(unicorn::Arch::ARM),
              unicorn::arch_supported(unicorn::Arch::MIPS));
 
-    let mut emu = Unicorn::new(unicorn::Arch::ARM, unicorn::Mode::THUMB)
+    let mut emu = Unicorn::<()>::new(unicorn::Arch::ARM, unicorn::Mode::THUMB)
         .expect("failed to create emulator");
 
     let page_size = emu.query(unicorn::Query::PAGE_SIZE).expect("failed to query page size");
