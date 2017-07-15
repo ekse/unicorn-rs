@@ -189,8 +189,9 @@ pub fn arch_supported(arch: Arch) -> bool {
 
 impl<T> Unicorn<T> {
     /// Create a new instance of the unicorn engine for the specified architecture
-    /// and hardware mode.
-    pub fn new(arch: Arch, mode: Mode) -> Result<Unicorn<T>, Error> {
+    /// and hardware mode. It returns a boxed unicorn to make sure that the address
+    // of the c pointer does not change.
+    pub fn new(arch: Arch, mode: Mode) -> Result<Box<Unicorn<T>>, Error> {
         // Verify bindings compatibility with the core before going further.
         let (major, minor) = unicorn_version();
         if major != BINDINGS_MAJOR || minor != BINDINGS_MINOR {
@@ -200,11 +201,11 @@ impl<T> Unicorn<T> {
         let mut handle: libc::size_t = 0;
         let err = unsafe { uc_open(arch, mode, &mut handle) };
         if err == Error::OK {
-            Ok(Unicorn {
+            Ok(Box::new(Unicorn {
                 handle: handle,
                 hooks: HashMap::default(),
                 running_data: std::ptr::null_mut(),
-            })
+            }))
         } else {
             Err(err)
         }
