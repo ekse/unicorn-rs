@@ -45,8 +45,7 @@ pub use mips_const::*;
 pub use sparc_const::*;
 pub use unicorn_const::*;
 pub use x86_const::*;
-pub use ffi::{uc_handle, uc_hook};
-pub use ffi::unicorn_const;
+pub use ffi::{uc_handle, uc_hook, uc_x86_mmr};
 
 pub const BINDINGS_MAJOR: u32 = 1;
 pub const BINDINGS_MINOR: u32 = 0;
