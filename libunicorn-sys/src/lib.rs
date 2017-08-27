@@ -20,6 +20,15 @@ pub struct uc_x86_msr {
     pub value: u64,
 }
 
+#[repr(C)]
+#[allow(non_camel_case_types)]
+pub struct uc_x86_mmr {
+    pub selector: u16,  /* not used by GDTR and IDTR */
+    pub base: u64, /* handle 32 or 64 bit CPUs */
+    pub limit: u32,
+    pub flags: u32, /* not used by GDTR and IDTR */
+}
+
 extern "C" {
     pub fn uc_version(major: *const u32, minor: *const u32) -> u32;
     pub fn uc_arch_supported(arch: Arch) -> bool;

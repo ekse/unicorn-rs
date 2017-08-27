@@ -681,6 +681,35 @@ impl<T> Unicorn<T> {
         };
         if err == Error::OK { Ok(()) } else { Err(err) }
     }
+
+    // Memory-Management Register for instructions IDTR, GDTR, LDTR, TR.
+    // x86 only
+    pub fn x86_mmr_read(&self, mmr: X86MMR) -> Result<uc_x86_mmr, Error> {
+        let mut value = uc_x86_mmr {
+            selector: 0,
+            base: 0,
+            limit: 0,
+            flags: 0,
+        };
+        let p_value: *mut uc_x86_mmr = &mut value;
+        let err = unsafe {
+            uc_reg_read(self.handle,
+                        (mmr as i32) as libc::c_int,
+                        p_value as *mut libc::c_void)
+        };
+        if err == Error::OK {
+            Ok(value)
+        } else {
+            Err(err)
+        }
+    }
+
+    // x86 only, write MMR register
+    pub fn x86_mmr_write(&mut self, mmr: X86MMR, value: &uc_x86_mmr) -> Result<(), Error> {
+        let p_value: *const uc_x86_mmr = value;
+        let err = unsafe { uc_reg_write(self.handle, mmr as i32, p_value as *const libc::c_void) };
+        if err == Error::OK { Ok(()) } else { Err(err) }
+    }
 }
 
 impl<T> Drop for Unicorn<T> {

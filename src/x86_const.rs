@@ -276,6 +276,14 @@ pub enum X86MSR {
     GS = 0xC0000101,
 }
 
+#[repr(C)]
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum X86MMR {
+    IDTR = 242,
+    GDTR = 243,
+    LDTR = 244,
+}
+
 
 impl Into<i32> for RegisterX86 {
     fn into(self) -> i32 {
