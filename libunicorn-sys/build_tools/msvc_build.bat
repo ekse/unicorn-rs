@@ -2,7 +2,7 @@
 
 set curdir=%cd%
 
-call "%~1" -arch=x64 -host_arch=x86 -no_logo
+call "%~1"
 if %errorlevel% neq 0 (
     exit /b 1
 )
