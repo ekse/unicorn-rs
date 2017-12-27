@@ -11,4 +11,4 @@ cd %curdir%
 
 set LIB=%LIB%;"%~2"
 
-msbuild msvc/unicorn.sln /m /t:unicorn_static /p:OutDir="%~2/";%3useenv=true;Configuration=Release
+msbuild msvc/unicorn.sln /m /t:unicorn_static /p:OutDir="%~2/";%3useenv=true;Configuration=Release;Platform=%4

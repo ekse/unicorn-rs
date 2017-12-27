@@ -10,7 +10,7 @@ use std::ffi::{OsString, OsStr};
 
 use build_helper::rustc::{link_search, link_lib};
 
-fn get_vcvars_path() -> OsString {
+fn get_vcvars_path_and_platform() -> (OsString, &'static str) {
     let vswhere_output = Command::new(r"build_tools\vswhere.exe")
         .args(&[
             "-latest",
@@ -34,12 +34,12 @@ fn get_vcvars_path() -> OsString {
         "i686" => {
             let old_style_path = [&visual_studio_path, "VC", "bin", "vcvars32.bat"].iter().collect::<PathBuf>();
             if old_style_path.is_file() {
-                return old_style_path.into_os_string();
+                return (old_style_path.into_os_string(), "Win32");
             }
 
             let new_style_path = [&visual_studio_path, "VC", "Auxiliary", "Build", "vcvars32.bat"].iter().collect::<PathBuf>();
             if new_style_path.is_file() {
-                return new_style_path.into_os_string();
+                return (new_style_path.into_os_string(), "Win32");
             }
 
             panic!("failed to locate 'vcvars32.bat'");
@@ -47,12 +47,12 @@ fn get_vcvars_path() -> OsString {
         "x86_64" => {
             let old_style_path = [&visual_studio_path, "VC", "bin", "x86_amd64", "vcvarsx86_amd64.bat"].iter().collect::<PathBuf>();
             if old_style_path.is_file() {
-                return old_style_path.into_os_string();
+                return (old_style_path.into_os_string(), "x64");
             }
 
             let new_style_path = [&visual_studio_path, "VC", "Auxiliary", "Build", "vcvarsx86_amd64.bat"].iter().collect::<PathBuf>();
             if new_style_path.is_file() {
-                return new_style_path.into_os_string();
+                return (new_style_path.into_os_string(), "x64");
             }
 
             panic!("failed to locate 'vcvarsx86_amd64.bat'");
@@ -92,8 +92,9 @@ fn main() {
             Err(_) => "".to_owned(),
         };
 
+        let (vcvars_path, platform) = get_vcvars_path_and_platform();
         let status = match Command::new(build_cmd_path)
-            .args(&[&get_vcvars_path(), OsStr::new(&out_dir), OsStr::new(&platform_toolset)])
+            .args(&[&vcvars_path, OsStr::new(&out_dir), OsStr::new(&platform_toolset), OsStr::new(platform)])
             .current_dir("unicorn")
             .status() {
             Ok(status) => status,
