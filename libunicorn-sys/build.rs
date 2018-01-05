@@ -88,7 +88,7 @@ fn main() {
             Path::new("msvc_build.bat")].iter().collect();
 
         let platform_toolset = match env::var("PLATFORMTOOLSET") {
-            Ok(x) => format!("PlatformToolset={};", x),
+            Ok(x) => x,
             Err(_) => "".to_owned(),
         };
 
