@@ -1,4 +1,8 @@
 # unicorn-rs
+
+[![Cargo](https://img.shields.io/crates/v/unicorn.svg)](https://crates.io/crates/unicorn)
+[![Documentation](https://docs.rs/unicorn/badge.svg)](https://docs.rs/unicorn)
+
 Rust bindings for the [unicorn](http://www.unicorn-engine.org/) CPU emulator.
 
 ```rust
