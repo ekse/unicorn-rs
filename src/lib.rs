@@ -273,7 +273,7 @@ pub trait Cpu {
 
 /// An ARM emulator instance.
 pub struct CpuARM {
-    emu: Unicorn,
+    emu: Box<Unicorn>,
 }
 
 impl CpuARM {
@@ -301,7 +301,7 @@ impl Cpu for CpuARM {
 
 /// An ARM64 emulator instance.
 pub struct CpuARM64 {
-    emu: Unicorn,
+    emu: Box<Unicorn>,
 }
 
 impl CpuARM64 {
@@ -329,7 +329,7 @@ impl Cpu for CpuARM64 {
 
 /// A M68K emulator instance.
 pub struct CpuM68K {
-    emu: Unicorn,
+    emu: Box<Unicorn>,
 }
 
 impl CpuM68K {
@@ -357,7 +357,7 @@ impl Cpu for CpuM68K {
 
 /// A MIPS emulator instance.
 pub struct CpuMIPS {
-    emu: Unicorn,
+    emu: Box<Unicorn>,
 }
 
 impl CpuMIPS {
@@ -385,7 +385,7 @@ impl Cpu for CpuMIPS {
 
 /// A SPARC emulator instance.
 pub struct CpuSPARC {
-    emu: Unicorn,
+    emu: Box<Unicorn>,
 }
 
 impl CpuSPARC {
@@ -413,7 +413,7 @@ impl Cpu for CpuSPARC {
 
 /// An X86 emulator instance.
 pub struct CpuX86 {
-    emu: Unicorn,
+    emu: Box<Unicorn>,
 }
 
 impl CpuX86 {
@@ -494,12 +494,12 @@ extern "C" fn insn_sys_hook_proxy(_: uc_handle, user_data: *mut InsnSysHook) {
     (insn_hook.callback)(unsafe { &*insn_hook.unicorn });
 }
 
-type CodeHook = UnicornHook<Box<Fn(&Unicorn, u64, u32)>>;
-type IntrHook = UnicornHook<Box<Fn(&Unicorn, u32)>>;
-type MemHook = UnicornHook<Box<Fn(&Unicorn, MemType, u64, usize, i64) -> bool>>;
-type InsnInHook = UnicornHook<Box<Fn(&Unicorn, u32, usize) -> u32>>;
-type InsnOutHook = UnicornHook<Box<Fn(&Unicorn, u32, usize, u32)>>;
-type InsnSysHook = UnicornHook<Box<Fn(&Unicorn)>>;
+type CodeHook = UnicornHook<Box<FnMut(&Unicorn, u64, u32)>>;
+type IntrHook = UnicornHook<Box<FnMut(&Unicorn, u32)>>;
+type MemHook = UnicornHook<Box<FnMut(&Unicorn, MemType, u64, usize, i64) -> bool>>;
+type InsnInHook = UnicornHook<Box<FnMut(&Unicorn, u32, usize) -> u32>>;
+type InsnOutHook = UnicornHook<Box<FnMut(&Unicorn, u32, usize, u32)>>;
+type InsnSysHook = UnicornHook<Box<FnMut(&Unicorn)>>;
 
 /// Internal : A Unicorn emulator instance, use one of the Cpu structs instead.
 pub struct Unicorn {
@@ -538,7 +538,7 @@ pub fn arch_supported(arch: Arch) -> bool {
 impl Unicorn {
     /// Create a new instance of the unicorn engine for the specified architecture
     /// and hardware mode.
-    pub fn new(arch: Arch, mode: Mode) -> Result<Unicorn, Error> {
+    pub fn new(arch: Arch, mode: Mode) -> Result<Box<Unicorn>, Error> {
         // Verify bindings compatibility with the core before going further.
         let (major, minor) = unicorn_version();
         if major != BINDINGS_MAJOR || minor != BINDINGS_MINOR {
@@ -548,7 +548,7 @@ impl Unicorn {
         let mut handle: libc::size_t = 0;
         let err = unsafe { uc_open(arch, mode, &mut handle) };
         if err == Error::OK {
-            Ok(Unicorn {
+            Ok(Box::new(Unicorn {
                 handle: handle,
                 code_callbacks: HashMap::default(),
                 intr_callbacks: HashMap::default(),
@@ -556,7 +556,7 @@ impl Unicorn {
                 insn_in_callbacks: HashMap::default(),
                 insn_out_callbacks: HashMap::default(),
                 insn_sys_callbacks: HashMap::default(),
-            })
+            }))
         } else {
             Err(err)
         }
