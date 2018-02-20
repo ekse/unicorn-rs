@@ -2,7 +2,7 @@ extern crate unicorn;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use unicorn::{Cpu, CpuX86, CpuARM, CpuMIPS};
+use unicorn::{Cpu, CpuARM, CpuMIPS, CpuX86};
 
 #[test]
 fn emulate_x86() {
@@ -13,22 +13,30 @@ fn emulate_x86() {
     assert_eq!(emu.reg_read(unicorn::RegisterX86::EAX), Ok(123));
 
     // Attempt to write to memory before mapping it.
-    assert_eq!(emu.mem_write(0x1000, &x86_code32),
-               (Err(unicorn::Error::WRITE_UNMAPPED)));
+    assert_eq!(
+        emu.mem_write(0x1000, &x86_code32),
+        (Err(unicorn::Error::WRITE_UNMAPPED))
+    );
 
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
-    assert_eq!(emu.mem_read(0x1000, x86_code32.len()),
-               Ok(x86_code32.clone()));
+    assert_eq!(
+        emu.mem_read(0x1000, x86_code32.len()),
+        Ok(x86_code32.clone())
+    );
 
     assert_eq!(emu.reg_write(unicorn::RegisterX86::ECX, 10), Ok(()));
     assert_eq!(emu.reg_write(unicorn::RegisterX86::EDX, 50), Ok(()));
 
-    assert_eq!(emu.emu_start(0x1000,
-                             (0x1000 + x86_code32.len()) as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(
+            0x1000,
+            (0x1000 + x86_code32.len()) as u64,
+            10 * unicorn::SECOND_SCALE,
+            1000
+        ),
+        Ok(())
+    );
     assert_eq!(emu.reg_read(unicorn::RegisterX86::ECX), Ok(11));
     assert_eq!(emu.reg_read(unicorn::RegisterX86::EDX), Ok(49));
 }
@@ -45,11 +53,15 @@ fn emulate_x86_negative_values() {
     assert_eq!(emu.reg_write_i32(unicorn::RegisterX86::ECX, -10), Ok(()));
     assert_eq!(emu.reg_write_i32(unicorn::RegisterX86::EDX, -50), Ok(()));
 
-    assert_eq!(emu.emu_start(0x1000,
-                             (0x1000 + x86_code32.len()) as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(
+            0x1000,
+            (0x1000 + x86_code32.len()) as u64,
+            10 * unicorn::SECOND_SCALE,
+            1000
+        ),
+        Ok(())
+    );
     assert_eq!(emu.reg_read_i32(unicorn::RegisterX86::ECX), Ok(-9));
     assert_eq!(emu.reg_read_i32(unicorn::RegisterX86::EDX), Ok(-51));
 }
@@ -76,10 +88,11 @@ fn test_callback_lifetime() {
     // Regression test for https://github.com/ekse/unicorn-rs/issues/13
     let emu = callback_lifetime_init();
     println!("Foobar");
-    assert_eq!(emu.emu_start(0x1000, 0x1002, 10 * unicorn::SECOND_SCALE, 1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(0x1000, 0x1002, 10 * unicorn::SECOND_SCALE, 1000),
+        Ok(())
+    );
 }
-
 
 #[test]
 fn x86_code_callback() {
@@ -103,8 +116,10 @@ fn x86_code_callback() {
 
     let hook = emu.add_code_hook(unicorn::CodeHookType::CODE, 0x1000, 0x2000, callback)
         .expect("failed to add code hook");
-    assert_eq!(emu.emu_start(0x1000, 0x1002, 10 * unicorn::SECOND_SCALE, 1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(0x1000, 0x1002, 10 * unicorn::SECOND_SCALE, 1000),
+        Ok(())
+    );
     assert_eq!(expects, *codes_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
 }
@@ -130,11 +145,15 @@ fn x86_intr_callback() {
     let hook = emu.add_intr_hook(callback)
         .expect("failed to add intr hook");
 
-    assert_eq!(emu.emu_start(0x1000,
-                             0x1000 + x86_code32.len() as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(
+            0x1000,
+            0x1000 + x86_code32.len() as u64,
+            10 * unicorn::SECOND_SCALE,
+            1000
+        ),
+        Ok(())
+    );
     assert_eq!(expect, *intr_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
 }
@@ -143,8 +162,10 @@ fn x86_intr_callback() {
 fn x86_mem_callback() {
     #[derive(PartialEq, Debug)]
     struct MemExpectation(unicorn::MemType, u64, usize, i64);
-    let expects = vec![MemExpectation(unicorn::MemType::WRITE, 0x2000, 4, 0xdeadbeef),
-                       MemExpectation(unicorn::MemType::READ_UNMAPPED, 0x10000, 4, 0)];
+    let expects = vec![
+        MemExpectation(unicorn::MemType::WRITE, 0x2000, 4, 0xdeadbeef),
+        MemExpectation(unicorn::MemType::READ_UNMAPPED, 0x10000, 4, 0),
+    ];
     let mems: Vec<MemExpectation> = Vec::new();
     let mems_cell = Rc::new(RefCell::new(mems));
 
@@ -162,8 +183,9 @@ fn x86_mem_callback() {
     // mov eax, 0xdeadbeef;
     // mov [0x2000], eax;
     // mov eax, [0x10000];
-    let x86_code32: Vec<u8> = vec![0xB8, 0xEF, 0xBE, 0xAD, 0xDE, 0xA3, 0x00, 0x20, 0x00, 0x00,
-                                   0xA1, 0x00, 0x00, 0x01, 0x00];
+    let x86_code32: Vec<u8> = vec![
+        0xB8, 0xEF, 0xBE, 0xAD, 0xDE, 0xA3, 0x00, 0x20, 0x00, 0x00, 0xA1, 0x00, 0x00, 0x01, 0x00
+    ];
 
     let mut emu = CpuX86::new(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
@@ -172,11 +194,15 @@ fn x86_mem_callback() {
     let hook = emu.add_mem_hook(unicorn::MemHookType::MEM_ALL, 0, std::u64::MAX, callback)
         .expect("failed to add memory hook");
     assert_eq!(emu.reg_write(unicorn::RegisterX86::EAX, 0x123), Ok(()));
-    assert_eq!(emu.emu_start(0x1000,
-                             0x1000 + x86_code32.len() as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             0x1000),
-               Err(unicorn::Error::READ_UNMAPPED));
+    assert_eq!(
+        emu.emu_start(
+            0x1000,
+            0x1000 + x86_code32.len() as u64,
+            10 * unicorn::SECOND_SCALE,
+            0x1000
+        ),
+        Err(unicorn::Error::READ_UNMAPPED)
+    );
 
     assert_eq!(expects, *mems_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
@@ -204,11 +230,15 @@ fn x86_insn_in_callback() {
     let hook = emu.add_insn_in_hook(callback)
         .expect("failed to add in hook");
 
-    assert_eq!(emu.emu_start(0x1000,
-                             0x1000 + x86_code32.len() as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(
+            0x1000,
+            0x1000 + x86_code32.len() as u64,
+            10 * unicorn::SECOND_SCALE,
+            1000
+        ),
+        Ok(())
+    );
     assert_eq!(expect, *insn_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
 }
@@ -234,11 +264,15 @@ fn x86_insn_out_callback() {
     let hook = emu.add_insn_out_hook(callback)
         .expect("failed to add in hook");
 
-    assert_eq!(emu.emu_start(0x1000,
-                             0x1000 + x86_code32.len() as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(
+            0x1000,
+            0x1000 + x86_code32.len() as u64,
+            10 * unicorn::SECOND_SCALE,
+            1000
+        ),
+        Ok(())
+    );
     assert_eq!(expect, *insn_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
 }
@@ -258,8 +292,9 @@ fn x86_insn_sys_callback() {
     };
 
     // MOV rax, 0xdeadbeef; SYSCALL;
-    let x86_code: Vec<u8> = vec![0x48, 0xB8, 0xEF, 0xBE, 0xAD, 0xDE, 0x00, 0x00, 0x00, 0x00, 0x0F,
-                                 0x05];
+    let x86_code: Vec<u8> = vec![
+        0x48, 0xB8, 0xEF, 0xBE, 0xAD, 0xDE, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x05
+    ];
 
     let mut emu = CpuX86::new(unicorn::Mode::MODE_64).expect("failed to instantiate emulator");
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
@@ -268,11 +303,15 @@ fn x86_insn_sys_callback() {
     let hook = emu.add_insn_sys_hook(unicorn::InsnSysX86::SYSCALL, 1, 0, callback)
         .expect("failed to add in hook");
 
-    assert_eq!(emu.emu_start(0x1000,
-                             0x1000 + x86_code.len() as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(
+            0x1000,
+            0x1000 + x86_code.len() as u64,
+            10 * unicorn::SECOND_SCALE,
+            1000
+        ),
+        Ok(())
+    );
     assert_eq!(expect, *insn_cell.borrow());
     assert_eq!(emu.remove_hook(hook), Ok(()));
 }
@@ -286,24 +325,32 @@ fn emulate_arm() {
     assert_eq!(emu.reg_read(unicorn::RegisterARM::R1), Ok(123));
 
     // Attempt to write to memory before mapping it.
-    assert_eq!(emu.mem_write(0x1000, &arm_code32),
-               (Err(unicorn::Error::WRITE_UNMAPPED)));
+    assert_eq!(
+        emu.mem_write(0x1000, &arm_code32),
+        (Err(unicorn::Error::WRITE_UNMAPPED))
+    );
 
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_write(0x1000, &arm_code32), Ok(()));
-    assert_eq!(emu.mem_read(0x1000, arm_code32.len()),
-               Ok(arm_code32.clone()));
+    assert_eq!(
+        emu.mem_read(0x1000, arm_code32.len()),
+        Ok(arm_code32.clone())
+    );
 
     assert_eq!(emu.reg_write(unicorn::RegisterARM::SP, 12), Ok(()));
     assert_eq!(emu.reg_write(unicorn::RegisterARM::R0, 10), Ok(()));
-    
+
     // ARM checks the least significant bit of the address to know
     // if the code is in Thumb mode.
-    assert_eq!(emu.emu_start(0x1000 | 0x01,
-                             (0x1000 | (0x01  + arm_code32.len())) as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(
+            0x1000 | 0x01,
+            (0x1000 | (0x01 + arm_code32.len())) as u64,
+            10 * unicorn::SECOND_SCALE,
+            1000
+        ),
+        Ok(())
+    );
     assert_eq!(emu.reg_read(unicorn::RegisterARM::SP), Ok(0));
     assert_eq!(emu.reg_read(unicorn::RegisterARM::R0), Ok(10));
 }
@@ -315,14 +362,20 @@ fn emulate_mips() {
     let mut emu = CpuMIPS::new(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
     assert_eq!(emu.mem_map(0x1000, 0x4000, unicorn::PROT_ALL), Ok(()));
     assert_eq!(emu.mem_write(0x1000, &mips_code32), Ok(()));
-    assert_eq!(emu.mem_read(0x1000, mips_code32.len()),
-               Ok(mips_code32.clone()));
+    assert_eq!(
+        emu.mem_read(0x1000, mips_code32.len()),
+        Ok(mips_code32.clone())
+    );
     assert_eq!(emu.reg_write(unicorn::RegisterMIPS::AT, 0), Ok(()));
-    assert_eq!(emu.emu_start(0x1000,
-                             (0x1000 + mips_code32.len()) as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(
+            0x1000,
+            (0x1000 + mips_code32.len()) as u64,
+            10 * unicorn::SECOND_SCALE,
+            1000
+        ),
+        Ok(())
+    );
     assert_eq!(emu.reg_read(unicorn::RegisterMIPS::AT), Ok(0x3456));
 }
 
@@ -333,7 +386,6 @@ fn mem_unmapping() {
     assert_eq!(emu.mem_unmap(0x1000, 0x4000), Ok(()));
 }
 
-
 #[test]
 fn mem_map_ptr() {
     // Use an array for the emulator memory.
@@ -343,22 +395,33 @@ fn mem_map_ptr() {
     let mut emu = CpuX86::new(unicorn::Mode::MODE_32).expect("failed to instantiate emulator");
 
     // Attempt to write to memory before mapping it.
-    assert_eq!(emu.mem_write(0x1000, &x86_code32),
-               (Err(unicorn::Error::WRITE_UNMAPPED)));
+    assert_eq!(
+        emu.mem_write(0x1000, &x86_code32),
+        (Err(unicorn::Error::WRITE_UNMAPPED))
+    );
 
-    assert_eq!(unsafe {emu.mem_map_ptr(0x1000, 0x4000, unicorn::PROT_ALL, mem.as_mut_ptr())}, Ok(()));
+    assert_eq!(
+        unsafe { emu.mem_map_ptr(0x1000, 0x4000, unicorn::PROT_ALL, mem.as_mut_ptr()) },
+        Ok(())
+    );
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
-    assert_eq!(emu.mem_read(0x1000, x86_code32.len()),
-               Ok(x86_code32.clone()));
+    assert_eq!(
+        emu.mem_read(0x1000, x86_code32.len()),
+        Ok(x86_code32.clone())
+    );
 
     assert_eq!(emu.reg_write(unicorn::RegisterX86::ECX, 10), Ok(()));
     assert_eq!(emu.reg_write(unicorn::RegisterX86::EDX, 50), Ok(()));
 
-    assert_eq!(emu.emu_start(0x1000,
-                             (0x1000 + x86_code32.len()) as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(
+            0x1000,
+            (0x1000 + x86_code32.len()) as u64,
+            10 * unicorn::SECOND_SCALE,
+            1000
+        ),
+        Ok(())
+    );
     assert_eq!(emu.reg_read(unicorn::RegisterX86::ECX), Ok(11));
     assert_eq!(emu.reg_read(unicorn::RegisterX86::EDX), Ok(49));
     assert_eq!(emu.mem_unmap(0x1000, 0x4000), Ok(()));
@@ -368,24 +431,34 @@ fn mem_map_ptr() {
     mem.reserve(4000);
 
     // Attempt to write to memory before mapping it.
-    assert_eq!(emu.mem_write(0x1000, &x86_code32),
-               (Err(unicorn::Error::WRITE_UNMAPPED)));
+    assert_eq!(
+        emu.mem_write(0x1000, &x86_code32),
+        (Err(unicorn::Error::WRITE_UNMAPPED))
+    );
 
-    assert_eq!(unsafe {emu.mem_map_ptr(0x1000, 0x4000, unicorn::PROT_ALL, mem.as_mut_ptr())}, Ok(()));
+    assert_eq!(
+        unsafe { emu.mem_map_ptr(0x1000, 0x4000, unicorn::PROT_ALL, mem.as_mut_ptr()) },
+        Ok(())
+    );
     assert_eq!(emu.mem_write(0x1000, &x86_code32), Ok(()));
-    assert_eq!(emu.mem_read(0x1000, x86_code32.len()),
-               Ok(x86_code32.clone()));
+    assert_eq!(
+        emu.mem_read(0x1000, x86_code32.len()),
+        Ok(x86_code32.clone())
+    );
 
     assert_eq!(emu.reg_write(unicorn::RegisterX86::ECX, 10), Ok(()));
     assert_eq!(emu.reg_write(unicorn::RegisterX86::EDX, 50), Ok(()));
 
-    assert_eq!(emu.emu_start(0x1000,
-                             (0x1000 + x86_code32.len()) as u64,
-                             10 * unicorn::SECOND_SCALE,
-                             1000),
-               Ok(()));
+    assert_eq!(
+        emu.emu_start(
+            0x1000,
+            (0x1000 + x86_code32.len()) as u64,
+            10 * unicorn::SECOND_SCALE,
+            1000
+        ),
+        Ok(())
+    );
     assert_eq!(emu.reg_read(unicorn::RegisterX86::ECX), Ok(11));
     assert_eq!(emu.reg_read(unicorn::RegisterX86::EDX), Ok(49));
     assert_eq!(emu.mem_unmap(0x1000, 0x4000), Ok(()));
 }
-
