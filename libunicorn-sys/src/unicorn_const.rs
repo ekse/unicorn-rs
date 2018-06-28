@@ -71,6 +71,8 @@ pub enum Error {
     WRITE_UNALIGNED, // Unaligned write
     FETCH_UNALIGNED, // Unaligned fetch
     HOOK_EXIST, // hook for this event already existed
+    RESOURCE, // Insufficient resource: uc_emu_start()
+    EXCEPTION, // Unhandled CPU exception
 }
 
 
