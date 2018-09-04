@@ -2,8 +2,7 @@
 
 [![Cargo](https://img.shields.io/crates/v/unicorn.svg)](https://crates.io/crates/unicorn)
 [![Documentation](https://docs.rs/unicorn/badge.svg)](https://docs.rs/unicorn)
-[Build Status]: https://api.travis-ci.org/serde-rs/serde.svg?branch=master
-[travis]: https://travis-ci.org/serde-rs/serde
+[![Build Status](https://api.travis-ci.org/serde-rs/serde.svg?branch=master)](https://travis-ci.org/serde-rs/serde)
 
 **Looking for maintainers**: I am looking for new maintainers for the project. If you are interested, please open an issue or contact me by email at ekse.0x@gmail.com.
 
