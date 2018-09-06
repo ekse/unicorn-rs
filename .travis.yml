@@ -2,4 +2,9 @@ language: rust
 rust:
   - stable
   - beta
-cache: cargo
+# Cache settings based on https://levans.fr/rust_travis_cache.html
+cache:
+  directories:
+    - /home/travis/.cargo
+before_cache:
+  - rm -rf /home/travis/.cargo/registry
