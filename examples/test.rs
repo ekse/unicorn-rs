@@ -23,9 +23,9 @@ fn main() {
 
     println!("Sample error message : {}", unicorn::Error::HOOK.msg());
 
-    emu.mem_map(0x10000, 0x4000, unicorn::Protection::ALL)
+    emu.mem_map(0x10000, 0x4000, unicorn::PROT_ALL)
         .expect("failed to map first memory region");
-    emu.mem_map(0x20000, 0x4000, unicorn::Protection::ALL)
+    emu.mem_map(0x20000, 0x4000, unicorn::PROT_ALL)
         .expect("failed to map second memory region");
     let regions = emu.mem_regions()
         .expect("failed to retrieve memory mappings");
